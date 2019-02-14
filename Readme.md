@@ -1,2 +1,4 @@
-# probabilistic-tf-idf - A"A trainable variant of tf-idf matching"
+# probabilistic-tf-idf
+
+A trainable variant of tf-idf matching
 

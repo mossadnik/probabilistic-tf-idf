@@ -14,7 +14,7 @@ def _read(fname):
 setup(
     name='ptfidf',
     version='0.0.1',
-    description='A"A trainable variant of tf-idf matching"',
+    description='A trainable variant of tf-idf matching',
     long_description=_read("Readme.md"),
     author='Matthias Ossadnik',
     author_email='ossadnik.matthias@gmail.com',
@@ -23,7 +23,7 @@ setup(
     package_dir={'': 'src'},
     url="https://github.com/mossadnik/probabilistic-tf-idf.git",
     setup_requires=['pytest-runner'],
-    install_requires=[],
+    install_requires=['numpy', 'scipy', 'pandas'],
     tests_require=['pytest'],
     classifiers=[
         'Development Status :: 1 - Planning',
