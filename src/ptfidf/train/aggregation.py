@@ -50,21 +50,21 @@ def get_token_statistics(X, labels):
         res.groupby(['token', 'k', 'n'])
         .size()
         .reset_index()
-        .rename(columns={0: 'cnt'}))
+        .rename(columns={0: 'weight'}))
 
     # add counts of entities without observation of token
     not_observed = (
         ut.cartesian_product(
             res[['token']].drop_duplicates(), nobs_counts)
         .merge(
-            res.groupby(['token', 'n'])[['cnt']].sum(),
+            res.groupby(['token', 'n'])[['weight']].sum(),
             left_on=['token', 'n'],
             right_index=True,
             how='left')
         .fillna(0))
-    not_observed['cnt'] = (not_observed['total'] - not_observed['cnt']).astype(int)
+    not_observed['weight'] = (not_observed['total'] - not_observed['weight']).astype(int)
     not_observed['k'] = 0
     not_observed.drop('total', axis=1, inplace=True)
     res = res.append(not_observed, sort=False).sort_values(['token', 'n', 'k'])
 
-    return res[res['cnt'] > 0]
+    return res[res['weight'] > 0]

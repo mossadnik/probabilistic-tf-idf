@@ -6,6 +6,7 @@ from ptfidf.train import aggregation
 
 
 def test_token_statistics():
+    """check aggregation on small example."""
     X = np.array([
         [1, 0],
         [0, 1],
@@ -20,7 +21,7 @@ def test_token_statistics():
         1: {(1, 0, 2), (2, 2, 1)},}
 
     res = aggregation.get_token_statistics(csr_matrix(X), labels)
-    actual = res.groupby('token').apply(lambda df: set(df[['n', 'k', 'cnt']].apply(tuple, axis=1))).to_dict()
+    actual = res.groupby('token').apply(lambda df: set(df[['n', 'k', 'weight']].apply(tuple, axis=1))).to_dict()
 
     assert set(expected.keys()) == set(actual.keys()), 'token set does not match'
     for k in expected.keys():
