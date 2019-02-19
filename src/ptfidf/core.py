@@ -5,7 +5,7 @@ from . import utils as ut
 
 
 def get_log_proba(U, V, n_observations, token_frequencies, strength):
-    r"""compute log observation probabilities.
+    """compute log observation probabilities.
 
     Parameters
     ----------
@@ -16,7 +16,7 @@ def get_log_proba(U, V, n_observations, token_frequencies, strength):
     n_observations : array
         number of observations for each class ($n_z$ in maths part)
     token_frequencies : array
-        prior token probabilities ($\pi_t$ in maths part)
+        prior token probabilities ($\\pi_t$ in maths part)
     strength : array
         prior strength parameter ($s_t$ in maths part)
     """
@@ -48,9 +48,6 @@ def get_log_proba(U, V, n_observations, token_frequencies, strength):
     )
     t_in_k_term = -np.array(t_in_k_cap_x_term.sum(axis=1)).ravel()  # note the minus
     t_in_k_cap_x_term.data += np.log((alpha + k) / alpha)
-
-    # match names
-    # -----------
 
     # \sum_{t \in x \cap k}
     log_proba = U.dot(t_in_k_cap_x_term.T)
