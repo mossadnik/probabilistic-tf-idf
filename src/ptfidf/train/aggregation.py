@@ -6,13 +6,14 @@ from .. import utils as ut
 
 
 def get_group_statistics(X, y):
-    """Aggregate token sufficient statistics to group level.
+    """
+    Aggregate token sufficient statistics to group level.
     
     Parameters
     ----------
-    X : csr_matrix
+    X : scipy.sparse.csr_matrix
         binary document-term matrix
-    y : array
+    y : numpy.ndarray
         group labels. Must have y.size == X.shape[0]
     
     Returns
@@ -36,70 +37,44 @@ def get_group_statistics(X, y):
     return counts, n_observations
 
 
-# TODO tokens that never occur are dropped. Should they be included?
-# TODD integrate with group level aggregation
-def get_token_statistics(X, labels):
-    """compute token statistics for all tokens from labeled name list.
-    
+def compress_group_statistics(counts, n_observations):
+    """
+    Aggregate group-level sufficient statistics into distinct likelihood terms.
+
     Parameters
     ----------
-    X : csr_matrix
-        token counts for each name
-    labels : pd.Series
-        entity associated to each name. Must have
-        labels.size == X.shape[0]
-    
+    counts : scipy.sparse.csr_matrix
+        token counts per group.
+    n_observations : numpy.ndarray
+        number of observations per group.
+
     Returns
     -------
-    pd.DataFrame
-        columns are
-        token   token id
-        n       number of names in entity
-        k       number of occurences of token
-        cnt     multiplicity of (token, n, k) 
-        
-        primary key is (token, n, k)
+    pandas.DataFrame
+        Sufficient statistics and weights for all token
+        likelihood terms. Columns ['token', 'n', 'k', 'weight']
+        with primary key ['token', 'n', 'k'].
     """
-    tokens = (
-        ut.sparse_to_frame(X)
-        .rename(columns={'col': 'token', 'data': 'k'})
-    )
+    n_tokens = counts.shape[1]
+    distinct_nobs, count_nobs = np.unique(n_observations, return_counts=True)
 
-    n_observations = pd.Series(labels.value_counts(), name='n')
-    nobs_counts = (
-        pd.Series(n_observations.value_counts(), name='total')
-        .reset_index()
-        .rename(columns={'index': 'n'}))
+    # Aggregate counts into distinct likelihood terms with weights / multiplicities
+    res = ut.sparse_to_frame(counts).rename(columns={'row': 'group', 'col': 'token', 'data': 'k'})
+    res['n'] = n_observations[res['group'].values]
+    res = res.groupby(['token', 'n', 'k']).size().reset_index().rename(columns={0: 'weight'})
 
-    # group token observations by entity
-    res = (
-        tokens
-        .assign(entity=tokens['row'].map(labels))
-        .groupby(['entity', 'token'])[['k']]
-        .sum()
-        .reset_index())
-
-    # add in number of observations and group by token
-    res['n'] = res['entity'].map(n_observations)
-    res = (
-        res.groupby(['token', 'k', 'n'])
-        .size()
-        .reset_index()
-        .rename(columns={0: 'weight'}))
-
-    # add counts of entities without observation of token
+    # fill in missing groups with no token observation
+    not_observed = pd.DataFrame({
+        k: arr.ravel() for k, arr in zip(['token', 'n'], np.meshgrid(np.arange(n_tokens), distinct_nobs))})
+    not_observed['weight'] = not_observed['n'].map(pd.Series(index=distinct_nobs, data=count_nobs))
+    not_observed.set_index(['token', 'n'], inplace=True)
     not_observed = (
-        ut.cartesian_product(
-            res[['token']].drop_duplicates(), nobs_counts)
-        .merge(
-            res.groupby(['token', 'n'])[['weight']].sum(),
-            left_on=['token', 'n'],
-            right_index=True,
-            how='left')
-        .fillna(0))
-    not_observed['weight'] = (not_observed['total'] - not_observed['weight']).astype(int)
-    not_observed['k'] = 0
-    not_observed.drop('total', axis=1, inplace=True)
-    res = res.append(not_observed, sort=False).sort_values(['token', 'n', 'k'])
+        not_observed
+        .subtract(res.groupby(['token', 'n'])[['weight']].sum(), fill_value=0)
+        .assign(k=0)
+        .reset_index()
+        .loc[:, ['token', 'n', 'k', 'weight']])
+    not_observed['weight'] = not_observed['weight'].astype(int)
+    not_observed = not_observed[not_observed['weight'] > 0]
 
-    return res[res['weight'] > 0]
+    return res.append(not_observed, ignore_index=True).sort_values(['token', 'n', 'k'])
