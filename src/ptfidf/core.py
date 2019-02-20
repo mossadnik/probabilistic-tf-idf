@@ -5,19 +5,20 @@ from . import utils as ut
 
 
 def get_log_proba(U, V, n_observations, token_frequencies, strength):
-    """compute log observation probabilities.
+    """
+    Compute log observation probabilities.
 
     Parameters
     ----------
-    U : csr_matrix
+    U : scipy.sparse.csr_matrix
         binary document-term matrix for observations
-    V : csr_matrix
+    V : scipy.sparse.csr_matrix
         document-term count matrix for classes ($k_{zt}$ in maths part)
-    n_observations : array
+    n_observations : numpy.ndarray
         number of observations for each class ($n_z$ in maths part)
-    token_frequencies : array
+    token_frequencies : numpy.ndarray
         prior token probabilities ($\\pi_t$ in maths part)
-    strength : array
+    strength : numpy.ndarray
         prior strength parameter ($s_t$ in maths part)
     """
     max_observations = n_observations.max()
@@ -64,18 +65,19 @@ def get_log_proba(U, V, n_observations, token_frequencies, strength):
 
 
 def get_log_prior(X, token_frequencies):
-    """compute log-prior of observations.
+    """
+    Compute log-prior of observations.
     
     Parameters
     ----------
-    X : csr_matrix
+    X : scipy.sparse.csr_matrix
         binary document-term matrix
-    token_frequencies : array
+    token_frequencies : numpy.ndarray
         prior probabilities of terms
         
     Returns
     -------
-    prior : array
+    prior : numpy.ndarray
         log-prior for each observation
     """
     prior = X.dot(np.log(token_frequencies / (1. - token_frequencies)))
@@ -84,17 +86,18 @@ def get_log_prior(X, token_frequencies):
 
 
 def get_proba(log_proba, log_prior, log_odds=0.):
-    """compute normalized match probabilities.
+    """
+    Compute normalized match probabilities.
     
     Takes into account possibility of creating a new partition,
     i.e. name not in list.
 
     Parameters
     ----------
-    log_proba : csr_matrix
+    log_proba : scipy.sparse.csr_matrix
         unnormalized log-probabilities. Observations in rows,
         classes in columns.
-    log_prior : array
+    log_prior : numpy.ndarray
         log-prior for each observation. Size must match number
         of rows of log_proba.
     log_odds : float, optional
@@ -102,7 +105,7 @@ def get_proba(log_proba, log_prior, log_odds=0.):
         
     Returns
     -------
-    proba : csr_matrix
+    proba : scipy.sparse.csr_matrix
         normalized probabilities. Same shape and sparsity structure as
         log_proba. Sum over rows is the probability to belong to any
         existing class (Rows sum to less than one)
