@@ -7,8 +7,9 @@ __pycache__/
 /.python-version
 /build/
 /dist/
+/.pytest_cache/
 
-/.eggs
+/.eggs/
 *.egg-info/
 
 /data/

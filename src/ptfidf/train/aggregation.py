@@ -1,8 +1,43 @@
+import numpy as np
+from scipy.sparse import csr_matrix
 import pandas as pd
 
 from .. import utils as ut
 
+
+def get_group_statistics(X, y):
+    """Aggregate token sufficient statistics to group level.
+    
+    Parameters
+    ----------
+    X : csr_matrix
+        binary document-term matrix
+    y : array
+        group labels. Must have y.size == X.shape[0]
+    
+    Returns
+    -------
+    counts : csr_matrix
+        token count vectors on group level. Shape
+        (max(y) + 1, X.shape[1]).
+    n_observations : array
+        number of observations for each group. Shape
+        n_observations.size == counts.shape[0].
+    """
+    if y.size != X.shape[0]:
+        raise ValueError('Incompatible shapes.')
+    n = y.size
+    dt = np.int32
+    data, row, col = np.ones(n, dtype=dt), y.astype(dt), np.arange(n, dtype=dt)
+    association = csr_matrix((data, (row, col)))
+    counts = association.dot(X)
+    n_observations = np.array(association.sum(axis=1)).ravel()
+    
+    return counts, n_observations
+
+
 # TODO tokens that never occur are dropped. Should they be included?
+# TODD integrate with group level aggregation
 def get_token_statistics(X, labels):
     """compute token statistics for all tokens from labeled name list.
     
