@@ -8,14 +8,14 @@ from .. import utils as ut
 def get_group_statistics(X, y):
     """
     Aggregate token sufficient statistics to group level.
-    
+
     Parameters
     ----------
     X : scipy.sparse.csr_matrix
         binary document-term matrix
     y : numpy.ndarray
         group labels. Must have y.size == X.shape[0]
-    
+
     Returns
     -------
     counts : csr_matrix
@@ -33,7 +33,7 @@ def get_group_statistics(X, y):
     association = csr_matrix((data, (row, col)))
     counts = association.dot(X)
     n_observations = np.array(association.sum(axis=1)).ravel()
-    
+
     return counts, n_observations
 
 
@@ -63,7 +63,9 @@ def compress_group_statistics(counts, n_observations):
     res['n'] = n_observations[res['group'].values]
     res = res.groupby(['token', 'n', 'k']).size().reset_index().rename(columns={0: 'weight'})
 
-    # fill in missing groups with no token observation
+    # fill in missing groups with no token observations (k == 0):
+    # Compute weight of terms (token, n, k == 0) by subtracting sum of weights
+    # for all (token, n, k > 0) from number of groups with n observations
     not_observed = pd.DataFrame({
         k: arr.ravel() for k, arr in zip(['token', 'n'], np.meshgrid(np.arange(n_tokens), distinct_nobs))})
     not_observed['weight'] = not_observed['n'].map(pd.Series(index=distinct_nobs, data=count_nobs))

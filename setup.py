@@ -23,7 +23,7 @@ setup(
     package_dir={'': 'src'},
     url="https://github.com/mossadnik/probabilistic-tf-idf.git",
     setup_requires=['pytest-runner'],
-    install_requires=['numpy', 'scipy', 'pandas'],
+    install_requires=['numpy', 'scipy', 'pandas', 'autograd'],
     tests_require=['pytest'],
     classifiers=[
         'Development Status :: 1 - Planning',

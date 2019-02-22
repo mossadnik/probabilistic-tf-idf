@@ -33,9 +33,9 @@ def test_compress_group_statistics():
         [1, 1, 0],
         [1, 2, 0],
         [1, 0, 0]])
-
     nobs = np.array([1, 2, 1])
 
+    # set of (n, k, weight) for each token
     expected = {
         0: {(1, 1, 2), (2, 1, 1)},
         1: {(1, 0, 1), (1, 1, 1), (2, 2, 1)},

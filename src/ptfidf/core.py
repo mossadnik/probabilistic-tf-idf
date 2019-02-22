@@ -60,21 +60,21 @@ def get_log_proba(U, V, n_observations, token_frequencies, strength):
     log_proba.data += t_in_x_term[row, n]
     # \sum_t
     log_proba.data += unconstrained_term[n]
-    
+
     return log_proba
 
 
 def get_log_prior(X, token_frequencies):
     """
     Compute log-prior of observations.
-    
+
     Parameters
     ----------
     X : scipy.sparse.csr_matrix
         binary document-term matrix
     token_frequencies : numpy.ndarray
         prior probabilities of terms
-        
+
     Returns
     -------
     prior : numpy.ndarray
@@ -88,7 +88,7 @@ def get_log_prior(X, token_frequencies):
 def get_proba(log_proba, log_prior, log_odds=0.):
     """
     Compute normalized match probabilities.
-    
+
     Takes into account possibility of creating a new partition,
     i.e. name not in list.
 
@@ -102,7 +102,7 @@ def get_proba(log_proba, log_prior, log_odds=0.):
         of rows of log_proba.
     log_odds : float, optional
         log-odds for having an existing class (vs creating a new one)
-        
+
     Returns
     -------
     proba : scipy.sparse.csr_matrix
@@ -121,5 +121,5 @@ def get_proba(log_proba, log_prior, log_odds=0.):
         lp -= lp_max
         norm = np.log(np.exp(lp).sum() + np.exp(-lp_max))
         proba.data[slc] = np.exp(lp - norm)
-    
+
     return proba
