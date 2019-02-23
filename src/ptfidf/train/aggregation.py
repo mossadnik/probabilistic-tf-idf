@@ -78,5 +78,16 @@ def compress_group_statistics(counts, n_observations):
         .loc[:, ['token', 'n', 'k', 'weight']])
     not_observed['weight'] = not_observed['weight'].astype(int)
     not_observed = not_observed[not_observed['weight'] > 0]
+    res = res.append(not_observed, ignore_index=True).sort_values(['token', 'n', 'k'])
 
-    return res.append(not_observed, ignore_index=True).sort_values(['token', 'n', 'k'])
+    # index distinct (n, k) tuples
+    nk = res[['n', 'k']].drop_duplicates().sort_values(['n', 'k'])
+    nk['idx'] = np.arange(nk.shape[0])
+    res = res.merge(nk, on=['n', 'k'])
+
+    # convert to numpy
+    n, k = nk['n'].values, nk['k'].values
+    weights = np.zeros((n_tokens, nk.shape[0]))
+    np.add.at(weights, (res['token'].values, res['idx'].values), res['weight'].values)
+
+    return n, k, weights
