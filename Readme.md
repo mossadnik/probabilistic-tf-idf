@@ -2,5 +2,6 @@
 
 # probabilistic-tf-idf
 
-A trainable alternative to tf-idf matching
+A trainable alternative to tf-idf matching.
 
+Currently WIP, working examples and some explanations can be found in [notebooks/](./notebooks).
