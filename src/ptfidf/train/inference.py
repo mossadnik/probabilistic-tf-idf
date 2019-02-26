@@ -44,9 +44,9 @@ def initialize_pi(n, k, weights, s):
     return weights.dot(k**a) / weights.dot(k**a + (n - k)**a)
 
 
-def map_estimate(n, k, weights, prior_mean, prior_std):
-    s = np.exp(prior_mean)
-    pi = initialize_pi(n, k, weights, s)
+def map_estimate(n, k, weights, prior_mean, prior_std, s_init=None, pi_init=None):
+    s = np.exp(prior_mean) if s_init is None else s_init
+    pi = initialize_pi(n, k, weights, s) if pi_init is None else pi_init
 
     res = minimize(
         loss,
