@@ -9,4 +9,4 @@ In addition, it offers the capability of supervised and unsupervised model train
 
 # Status
 
-Currently under construction. Working examples and some explanations can be found in [notebooks/](./notebooks).
+Currently under construction. Working examples and some explanations can be found in [notebooks/examples.ipynb](./notebooks/examples.ipynb).
