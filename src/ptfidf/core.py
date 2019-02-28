@@ -4,25 +4,25 @@ from scipy.sparse import csr_matrix
 from . import utils as ut
 
 
-def get_log_proba(U, V, n_observations, token_frequencies, strength):
+def get_log_proba(X, entity_stats, token_frequencies, strength):
     """
     Compute log observation probabilities.
 
     Parameters
     ----------
-    U : scipy.sparse.csr_matrix
+    X : scipy.sparse.csr_matrix
         binary document-term matrix for observations
-    V : scipy.sparse.csr_matrix
-        document-term count matrix for classes ($k_{zt}$ in maths part)
-    n_observations : numpy.ndarray
-        number of observations for each class ($n_z$ in maths part)
+    entity_stats : EntityStats
+        Entity-level word count statistics
     token_frequencies : numpy.ndarray
         prior token probabilities ($\\pi_t$ in maths part)
     strength : numpy.ndarray
         prior strength parameter ($s_t$ in maths part)
     """
-    max_observations = n_observations.max()
-    n_tokens = U.shape[1]
+    Y = entity_stats.counts
+    n_tokens = X.shape[1]
+    n_obs = entity_stats.n_observations
+    max_observations = n_obs.max()
 
     # compute p^0_t for all relevant n
     p0 = np.zeros((max_observations + 1, n_tokens), dtype=np.float32)
@@ -31,32 +31,32 @@ def get_log_proba(U, V, n_observations, token_frequencies, strength):
 
     # k-independent terms
     unconstrained_term = np.log(1. - p0).sum(axis=1)
-    t_in_x_term = U.dot(np.log(p0 / (1. - p0)).T)
+    t_in_x_term = X.dot(np.log(p0 / (1. - p0)).T)
 
     # k-dependent terms
-    row = ut.sparse_row_indices(V)
-    k = V.data  # count vectors
-    n = n_observations[row]  # observation numbers
-    t = V.indices  # token indices
+    row = ut.sparse_row_indices(entity_stats.counts)
+    k = Y.data  # count vectors
+    n = n_obs[row]  # observation numbers
+    t = Y.indices  # token indices
 
     alpha = strength[t] * token_frequencies[t]
     beta = strength[t] * (1. - token_frequencies)[t]
 
     # interleave these two terms so that results can be shared
     t_in_k_cap_x_term = csr_matrix(
-        (np.log((beta + n) / (beta + n - k)), V.indices, V.indptr),
-        shape=V.shape
+        (np.log((beta + n) / (beta + n - k)), Y.indices, Y.indptr),
+        shape=Y.shape
     )
     t_in_k_term = -np.array(t_in_k_cap_x_term.sum(axis=1)).ravel()  # note the minus
     t_in_k_cap_x_term.data += np.log((alpha + k) / alpha)
 
     # \sum_{t \in x \cap k}
-    log_proba = U.dot(t_in_k_cap_x_term.T)
+    log_proba = X.dot(t_in_k_cap_x_term.T)
     # \sum_{t \in k}
     log_proba.data += t_in_k_term[log_proba.indices]
     # \sum_{t \in x}
     row = ut.sparse_row_indices(log_proba)
-    n = n_observations[log_proba.indices]
+    n = n_obs[log_proba.indices]
     log_proba.data += t_in_x_term[row, n]
     # \sum_t
     log_proba.data += unconstrained_term[n]
@@ -119,7 +119,32 @@ def get_proba(log_proba, log_prior, log_odds=0.):
         lp = log_proba.data[slc] - log_prior[row] + log_odds
         lp_max = lp.max()
         lp -= lp_max
-        norm = np.log(np.exp(lp).sum() + np.exp(-lp_max))
+        norm = np.log(np.sum(np.exp(lp)) + np.exp(-lp_max))
         proba.data[slc] = np.exp(lp - norm)
 
     return proba
+
+
+def sample_assignments(proba):
+    """
+    Randomly assing observations according to distribution.
+
+    Parameters
+    ----------
+    proba : scipy.sparse.csr_matrix
+        Assignment probabilities.
+
+    Returns
+    -------
+    assignments : numpy.ndarray of int
+        Sampled assignments, -1 is used to indicate
+        unassigned (i.e. assigned to new entity).
+    """
+    n_test = proba.shape[0]
+    assignments = -np.ones(n_test, dtype=np.int32)
+    rnd = np.random.rand(n_test)
+    for row, slc in ut.sparse_iter_rows(proba):
+        choice = np.searchsorted(np.cumsum(proba.data[slc]), rnd[row])
+        if choice < slc.stop - slc.start:
+            assignments[row] = proba.indices[slc][choice]
+    return assignments

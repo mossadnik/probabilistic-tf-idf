@@ -1,8 +1,11 @@
+"""Tests for ptfidf.core."""
+
 import numpy as np
 from scipy.sparse import csr_matrix
 from scipy.special import gammaln
 
 from ptfidf.core import get_log_proba
+from ptfidf.train.aggregation import EntityStatistics
 
 
 def beta_log_normalizer(a, b):
@@ -32,7 +35,7 @@ def expected_log_proba(x, k, n, alpha, beta):
 def test_log_proba_values():
     """test that sparse log-proba computation reproduces direct implementation."""
     # inputs
-    U = np.array([
+    X = np.array([
         [1., 1., 0.],
         [0., 1., 1.]
     ])
@@ -45,12 +48,13 @@ def test_log_proba_values():
 
     # expected result: log-likelihood if at least one token matches, else zero
     alpha, beta = s * pi, s * (1 - pi)
-    expected = np.zeros((U.shape[0], V.shape[0]))
-    for i in range(U.shape[0]):
+    expected = np.zeros((X.shape[0], V.shape[0]))
+    for i in range(X.shape[0]):
         for j in range(V.shape[0]):
-            u, v, n = U[i], V[j], n_obs[j]
+            u, v, n = X[i], V[j], n_obs[j]
             if u.dot(v) > 0:
                 expected[i, j] = expected_log_proba(u, v, n, alpha, beta)
 
-    observed = get_log_proba(csr_matrix(U), csr_matrix(V), n_obs, pi, s).toarray()
-    assert np.allclose(expected, observed)
+    entity_stats = EntityStatistics(csr_matrix(V), n_obs)
+    actual = get_log_proba(csr_matrix(X), entity_stats, pi, s).toarray()
+    assert np.allclose(actual, expected)

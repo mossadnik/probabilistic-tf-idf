@@ -1,3 +1,5 @@
+"""Utility functions."""
+
 import numpy as np
 import pandas as pd
 
@@ -21,3 +23,9 @@ def sparse_row_indices(mat):
 def sparse_to_frame(mat):
     """Convert sparse matrix into long-format DataFrame."""
     return pd.DataFrame({'row': sparse_row_indices(mat), 'col': mat.indices, 'data': mat.data})
+
+
+def damped_update(old, new, fraction=1.):
+    """inplace damped update."""
+    old *= (1. - fraction)
+    old += fraction * new

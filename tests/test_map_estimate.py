@@ -1,7 +1,10 @@
+"""Tests for ptfidf.train.inference."""
+
 import numpy as np
 
 
 from ptfidf.train.inference import map_estimate
+from ptfidf.train.aggregation import TokenStatistics
 
 
 def test_map_estimate_easy():
@@ -24,7 +27,7 @@ def test_map_estimate_easy():
     expected_pi = np.array([.3, .01])
     expected_s = np.exp(prior_mean) * np.ones_like(expected_pi)
 
-    pi, s = map_estimate(n, k, weights, prior_mean, 1.)
+    pi, s = map_estimate(TokenStatistics(n, k, weights), prior_mean, 1.)
 
     assert np.allclose(pi, expected_pi), pi
     assert np.allclose(s, expected_s), s
