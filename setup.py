@@ -11,6 +11,13 @@ def _read(fname):
         return ''
 
 
+requirements = [
+    'numpy',
+    'scipy',
+    'pandas',
+    'autograd',
+]
+
 setup(
     name='ptfidf',
     version='0.0.1',
@@ -23,13 +30,14 @@ setup(
     package_dir={'': 'src'},
     url="https://github.com/mossadnik/probabilistic-tf-idf.git",
     setup_requires=['pytest-runner'],
-    install_requires=['numpy', 'scipy', 'pandas', 'autograd'],
+    install_requires=requirements,
     tests_require=['pytest'],
+    test_suite='tests',
     classifiers=[
-        'Development Status :: 1 - Planning',
+        'Development Status :: 3 - Alpha',
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python :: 3',
-        'Topic :: Scientific/Engineering',
+        'Topic :: Scientific/Engineering :: Artificial Intelligence',
     ],
 )
