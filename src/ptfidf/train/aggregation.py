@@ -30,6 +30,10 @@ class EntityStatistics(object):
         self.n_observations += other.n_observations
         return self
 
+    def copy(self):
+        """return new EntityStatistics with copied parameter arrays."""
+        return self.__class__(self.counts.copy(), self.n_observations.copy())
+
 
 def get_entity_statistics(X, y, n_classes=None):
     """
@@ -115,6 +119,10 @@ class TokenStatistics(object):
             self.n, self.k = _idx2nk(idx)
         return self
 
+    def copy(self):
+        """Return new TokenStatistics instance with copied parameter arrays."""
+        return self.__class__(self.n.copy(), self.k.copy(), self.weights.copy())
+
 
 def get_token_statistics(entity_stats):
     """
@@ -169,7 +177,7 @@ def get_token_statistics(entity_stats):
     return TokenStatistics(n, k, weights)
 
 
-def get_observation_token_statistics(X):
+def get_observation_token_statistics(observations):
     """
     Compute token-level statistics from observations.
 
@@ -178,7 +186,7 @@ def get_observation_token_statistics(X):
 
     Parameters
     ----------
-    X : scipy.sparse.csr_matrix
+    observations : scipy.sparse.csr_matrix
         Binary observation matrix
 
     Returns
@@ -188,7 +196,7 @@ def get_observation_token_statistics(X):
     """
     n = np.array([1, 1])
     k = np.array([0, 1])
-    weights = np.zeros((X.shape[1], 2))
-    weights[:, 1] = np.array(X.sum(axis=0)).ravel()
-    weights[:, 0] = X.shape[0] - weights[:, 1]
+    weights = np.zeros((observations.shape[1], 2))
+    weights[:, 1] = np.array(observations.sum(axis=0)).ravel()
+    weights[:, 0] = observations.shape[0] - weights[:, 1]
     return TokenStatistics(n, k, weights)

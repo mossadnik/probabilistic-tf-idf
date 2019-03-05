@@ -10,7 +10,7 @@ from scipy.optimize import minimize
 import autograd.numpy as anp
 from autograd import grad
 
-from .likelihood import beta_binomial_log_likelihood
+from .likelihood import beta_binomial_log_likelihood, BetaParameters
 
 
 def _pack(pi, s):
@@ -60,4 +60,4 @@ def map_estimate(token_stats, prior_mean, prior_std, s_init=None, pi_init=None):
 
     if not res.success:
         warnings.warn('failed to converge')
-    return _unpack(res.x)
+    return BetaParameters(*_unpack(res.x))
