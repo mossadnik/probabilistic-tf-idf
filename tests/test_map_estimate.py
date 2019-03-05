@@ -27,7 +27,7 @@ def test_map_estimate_easy():
     expected_pi = np.array([.3, .01])
     expected_s = np.exp(prior_mean) * np.ones_like(expected_pi)
 
-    pi, s = map_estimate(TokenStatistics(n, k, weights), prior_mean, 1.)
+    beta_params = map_estimate(TokenStatistics(n, k, weights), prior_mean, 1.)
 
-    assert np.allclose(pi, expected_pi), pi
-    assert np.allclose(s, expected_s), s
+    assert np.allclose(beta_params.frequency, expected_pi)
+    assert np.allclose(beta_params.strength, expected_s)
