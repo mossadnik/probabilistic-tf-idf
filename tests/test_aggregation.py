@@ -28,16 +28,16 @@ def test_group_statistics():
     assert np.all(actual.n_observations == expected_nobs), 'n_observations does not match'
 
 
-def test_compress_group_statistics():
+def test_get_token_statistics():
     """check aggregation on small example."""
     counts = np.array([
         [1, 1, 0],
         [1, 2, 0],
         [1, 0, 0]])
-    nobs = np.array([1, 2, 1])
+    nobs = np.array([1, 3, 1])
     entity_stats = agg.EntityStatistics(csr_matrix(counts), nobs)
 
-    expected_n = np.array([1, 1, 2, 2, 2])
+    expected_n = np.array([1, 1, 3, 3, 3])
     expected_k = np.array([0, 1, 0, 1, 2])
     expected_weights = np.array([
         [0, 2, 0, 1, 0],
@@ -45,7 +45,7 @@ def test_compress_group_statistics():
         [2, 0, 1, 0, 0]
     ])
 
-    token_stats = agg.get_token_statistics(entity_stats)
+    token_stats = entity_stats.get_token_statistics()
 
     assert np.all(token_stats.n == expected_n)
     assert np.all(token_stats.k == expected_k)
@@ -66,7 +66,7 @@ def test_idx2nk():
     assert np.all(k_actual == k)
 
 
-def test_add_token_statisitics_index():
+def test_add_token_statistics_index():
     """Test merging when indices differ."""
     left = agg.TokenStatistics(
         np.array([1, 1]),

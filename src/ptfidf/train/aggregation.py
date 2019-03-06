@@ -2,7 +2,6 @@
 
 import numpy as np
 from scipy.sparse import csr_matrix
-import pandas as pd
 
 from .. import utils as ut
 
@@ -34,51 +33,74 @@ class EntityStatistics(object):
         """return new EntityStatistics with copied parameter arrays."""
         return self.__class__(self.counts.copy(), self.n_observations.copy())
 
+    def get_token_statistics(self):
+        """Aggregate sufficient statistics to token level."""
+        # group by (token, (n, k)) and count
+        rows = ut.sparse_row_indices(self.counts)
+        groups, cnt = np.unique(
+            np.r_[self.counts.indices[None, :], _nk2idx(self.n_observations[rows], self.counts.data)[None, :]],
+            return_counts=True,
+            axis=1)
 
-def get_entity_statistics(X, y, n_classes=None):
-    """
-    Aggregate observations to entity level.
+        # compute relevant (n, k) indices
+        index = np.unique(groups[1])  # from data
+        n, k = _idx2nk(index)
+        n_unique = np.unique(n)
+        zero_index = _nk2idx(n_unique, np.zeros_like(n_unique))  # (n, k=0) for all n in data
+        full_index = np.union1d(index, zero_index)  # all
+        n, k = _idx2nk(full_index)
+
+        # observations with k > 0 from data
+        weights = np.zeros((self.counts.shape[1], full_index.size), dtype=np.int64)
+        idx = np.searchsorted(full_index, np.arange(full_index.max() + 1))
+        np.add.at(weights, (groups[0], idx[groups[1]]), cnt)
+        # add observations for k = 0
+        _, n_observations_counts = np.unique(self.n_observations, return_counts=True)
+        bnd = bnd = np.concatenate([np.searchsorted(full_index, zero_index), [full_index.size]])
+        for i in range(bnd.size - 1):
+            weights[:, bnd[i]] = n_observations_counts[i] - weights[:, bnd[i]:bnd[i + 1]].sum(axis=1)
+        return TokenStatistics(n, k, weights)
+
+
+def get_entity_statistics(observations, assignments, n_classes=None):
+    """Aggregate observations to entity level.
 
     Parameters
     ----------
-    X : scipy.sparse.csr_matrix
+    observations : scipy.sparse.csr_matrix
         binary document-term matrix
-    y : numpy.ndarray
+    assignment : numpy.ndarray
         class labels. Must have y.size == X.shape[0]
+    n_classes : int, optional
+        number of classes (defaults to `y.max() + 1`)
 
     Returns
     -------
-    counts : scipy.sparse.csr_matrix
-        token count vectors on group level. Shape
-        (max(y) + 1, X.shape[1]).
-    n_observations : numpy.ndarray
-        number of observations for each group. Shape
-        n_observations.size == counts.shape[0].
+    EntityStatistics
     """
-    if y.size != X.shape[0]:
+    if assignments.size != observations.shape[0]:
         raise ValueError('Incompatible shapes.')
-    n = y.size
+    n = assignments.size
     if n_classes is None:
-        n_classes = y.max() + 1
+        n_classes = assignments.max() + 1
     dt = np.int32
-    data, row, col = np.ones(n, dtype=dt), y.astype(dt), np.arange(n, dtype=dt)
-    assignments = csr_matrix((data, (row, col)), shape=(n_classes, X.shape[0]))
-    counts = assignments.dot(X)
-    n_observations = np.array(assignments.sum(axis=1)).ravel()
+    data, row, col = np.ones(n, dtype=dt), assignments.astype(dt), np.arange(n, dtype=dt)
+    assignments_mat = csr_matrix((data, (row, col)), shape=(n_classes, observations.shape[0]))
+    counts = assignments_mat.dot(observations)
+    n_observations = np.array(assignments_mat.sum(axis=1)).ravel()
 
     return EntityStatistics(counts, n_observations)
 
 
 def _nk2idx(n, k):
-    """convert n, k to integer index."""
+    """Convert n, k to integer index."""
     return ((n - 1) * (n + 2)) // 2 + k
 
 
 def _idx2nk(idx):
-    """
-    convert integer index to n, k.
+    """Convert integer index to n, k.
 
-    inverse of _nk2idx
+    inverse of _nk2idx.
     """
     n = np.floor(-.5 + .5 * np.sqrt(9 + 8 * idx)).astype(int)
     k = idx - (n - 1) * (n + 2) // 2
@@ -90,7 +112,7 @@ class TokenStatistics(object):
     def __init__(self, n, k, weights):
         self.n = n
         self.k = k
-        self.weights = weights
+        self.weights = weights.astype(np.float32)
 
     @property
     def size(self):
@@ -103,7 +125,7 @@ class TokenStatistics(object):
 
 
     def add(self, other):
-        """merge counts, add weights."""
+        """Merge counts, add weights."""
         if self.size != other.size:
             raise ValueError('Shape mismatch: number of token differs.')
         idx_self = _nk2idx(self.n, self.k)
@@ -124,59 +146,6 @@ class TokenStatistics(object):
         return self.__class__(self.n.copy(), self.k.copy(), self.weights.copy())
 
 
-def get_token_statistics(entity_stats):
-    """
-    Aggregate entity-level sufficient statistics into distinct likelihood terms.
-
-    Parameters
-    ----------
-    entity_stats : EntityStatistics
-
-    Returns
-    -------
-    pandas.DataFrame
-        Sufficient statistics and weights for all tokens
-        likelihood terms. Columns ['token', 'n', 'k', 'weight']
-        with primary key ['token', 'n', 'k'].
-    """
-    n_tokens = entity_stats.counts.shape[1]
-    distinct_nobs, count_nobs = np.unique(entity_stats.n_observations, return_counts=True)
-
-    # Aggregate counts into distinct likelihood terms with weights / multiplicities
-    res = ut.sparse_to_frame(entity_stats.counts).rename(columns={'row': 'group', 'col': 'token', 'data': 'k'})
-    res['n'] = entity_stats.n_observations[res['group'].values]
-    res = res.groupby(['token', 'n', 'k']).size().reset_index().rename(columns={0: 'weight'})
-
-    # fill in missing groups with no token observations (k == 0):
-    # Compute weight of terms (token, n, k == 0) by subtracting sum of weights
-    # for all (token, n, k > 0) from number of groups with n observations
-    not_observed = pd.DataFrame({
-        k: arr.ravel() for k, arr in zip(['token', 'n'], np.meshgrid(np.arange(n_tokens), distinct_nobs))})
-    not_observed['weight'] = not_observed['n'].map(pd.Series(index=distinct_nobs, data=count_nobs))
-    not_observed.set_index(['token', 'n'], inplace=True)
-    not_observed = (
-        not_observed
-        .subtract(res.groupby(['token', 'n'])[['weight']].sum(), fill_value=0)
-        .assign(k=0)
-        .reset_index()
-        .loc[:, ['token', 'n', 'k', 'weight']])
-    not_observed['weight'] = not_observed['weight'].astype(int)
-    not_observed = not_observed[not_observed['weight'] > 0]
-    res = res.append(not_observed, ignore_index=True).sort_values(['token', 'n', 'k'])
-
-    # index distinct (n, k) tuples
-    nk = res[['n', 'k']].drop_duplicates().sort_values(['n', 'k'])
-    nk['idx'] = np.arange(nk.shape[0])
-    res = res.merge(nk, on=['n', 'k'])
-
-    # convert to numpy
-    n, k = nk['n'].values, nk['k'].values
-    weights = np.zeros((n_tokens, nk.shape[0]))
-    np.add.at(weights, (res['token'].values, res['idx'].values), res['weight'].values)
-
-    return TokenStatistics(n, k, weights)
-
-
 def get_observation_token_statistics(observations):
     """
     Compute token-level statistics from observations.
@@ -191,7 +160,7 @@ def get_observation_token_statistics(observations):
 
     Returns
     -------
-    token_stats : TokenStatistics
+    TokenStatistics
         Only the weights with n == 1 are populated.
     """
     n = np.array([1, 1])
