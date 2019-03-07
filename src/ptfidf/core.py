@@ -1,26 +1,27 @@
+"""Low-level observation model functions."""
+
 import numpy as np
 from scipy.sparse import csr_matrix
 
 from . import utils as ut
 
 
-def get_log_proba(X, entity_stats, token_frequencies, strength):
-    """
-    Compute log observation probabilities.
+def get_log_proba(observations, entity_stats, token_frequencies, strength):
+    r"""Compute log observation probabilities.
 
     Parameters
     ----------
-    X : scipy.sparse.csr_matrix
+    observations : scipy.sparse.csr_matrix
         binary document-term matrix for observations
     entity_stats : EntityStats
         Entity-level word count statistics
     token_frequencies : numpy.ndarray
-        prior token probabilities ($\\pi_t$ in maths part)
+        prior token probabilities ($\pi_t$ in maths part)
     strength : numpy.ndarray
         prior strength parameter ($s_t$ in maths part)
     """
-    Y = entity_stats.counts
-    n_tokens = X.shape[1]
+    counts = entity_stats.counts
+    n_tokens = observations.shape[1]
     n_obs = entity_stats.n_observations
     max_observations = n_obs.max()
 
@@ -31,32 +32,32 @@ def get_log_proba(X, entity_stats, token_frequencies, strength):
 
     # k-independent terms
     unconstrained_term = np.log(1. - p0).sum(axis=1)
-    t_in_x_term = X.dot(np.log(p0 / (1. - p0)).T)
 
     # k-dependent terms
-    row = ut.sparse_row_indices(entity_stats.counts)
-    k = Y.data  # count vectors
-    n = n_obs[row]  # observation numbers
-    t = Y.indices  # token indices
+    k = counts.data  # count vectors
+    n = n_obs[ut.sparse_row_indices(counts)]  # observation numbers
+    t = counts.indices  # token indices
 
     alpha = strength[t] * token_frequencies[t]
     beta = strength[t] * (1. - token_frequencies)[t]
 
     # interleave these two terms so that results can be shared
     t_in_k_cap_x_term = csr_matrix(
-        (np.log((beta + n) / (beta + n - k)), Y.indices, Y.indptr),
-        shape=Y.shape
+        (np.log((beta + n) / (beta + n - k)), counts.indices, counts.indptr),
+        shape=counts.shape
     )
     t_in_k_term = -np.array(t_in_k_cap_x_term.sum(axis=1)).ravel()  # note the minus
     t_in_k_cap_x_term.data += np.log((alpha + k) / alpha)
 
-    # \sum_{t \in x \cap k}
-    log_proba = X.dot(t_in_k_cap_x_term.T)
+    # everything above can be precomputed
+    # \sum_{t \in observations \cap k}
+    log_proba = observations.dot(t_in_k_cap_x_term.T)
     # \sum_{t \in k}
     log_proba.data += t_in_k_term[log_proba.indices]
     # \sum_{t \in x}
-    row = ut.sparse_row_indices(log_proba)
     n = n_obs[log_proba.indices]
+    t_in_x_term = observations.dot(np.log(p0 / (1. - p0)).T)
+    row = ut.sparse_row_indices(log_proba)
     log_proba.data += t_in_x_term[row, n]
     # \sum_t
     log_proba.data += unconstrained_term[n]
@@ -64,15 +65,14 @@ def get_log_proba(X, entity_stats, token_frequencies, strength):
     return log_proba
 
 
-def get_log_prior(X, token_frequencies):
-    """
-    Compute log-prior of observations.
+def get_log_prior(observations, token_frequencies):
+    """Compute log-prior of observations.
 
     Parameters
     ----------
-    X : scipy.sparse.csr_matrix
+    observations : (N, T) scipy.sparse.csr_matrix
         binary document-term matrix
-    token_frequencies : numpy.ndarray
+    token_frequencies : (T,) numpy.ndarray
         prior probabilities of terms
 
     Returns
@@ -80,14 +80,13 @@ def get_log_prior(X, token_frequencies):
     prior : numpy.ndarray
         log-prior for each observation
     """
-    prior = X.dot(np.log(token_frequencies / (1. - token_frequencies)))
+    prior = observations.dot(np.log(token_frequencies / (1. - token_frequencies)))
     prior += np.log(1. - token_frequencies).sum()
     return prior
 
 
 def get_proba(log_proba, log_prior, log_odds=0.):
-    """
-    Compute normalized match probabilities.
+    """Compute normalized match probabilities.
 
     Takes into account possibility of creating a new partition,
     i.e. name not in list.
@@ -101,14 +100,14 @@ def get_proba(log_proba, log_prior, log_odds=0.):
         log-prior for each observation. Size must match number
         of rows of log_proba.
     log_odds : float, optional
-        log-odds for having an existing class (vs creating a new one)
+        log-odds for assignment to an existing class vs creating a new one.
 
     Returns
     -------
     proba : scipy.sparse.csr_matrix
         normalized probabilities. Same shape and sparsity structure as
         log_proba. Sum over rows is the probability to belong to any
-        existing class (Rows sum to less than one)
+        existing class (Rows sum to less than one).
     """
     proba = csr_matrix(
         (np.empty_like(log_proba.data), log_proba.indices, log_proba.indptr),
@@ -126,8 +125,7 @@ def get_proba(log_proba, log_prior, log_odds=0.):
 
 
 def sample_assignments(proba):
-    """
-    Randomly assing observations according to distribution.
+    """Randomly assing observations according to distribution.
 
     Parameters
     ----------
