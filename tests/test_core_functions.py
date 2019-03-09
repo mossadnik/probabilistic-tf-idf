@@ -4,7 +4,7 @@ import numpy as np
 from scipy.sparse import csr_matrix
 from scipy.special import gammaln
 
-from ptfidf.core import get_log_proba, SparseBetaBernoulliModel
+from ptfidf.core import SparseBetaBernoulliModel
 from ptfidf.train.aggregation import EntityStatistics
 
 
