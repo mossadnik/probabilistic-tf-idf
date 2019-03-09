@@ -1,68 +1,63 @@
 """Low-level observation model functions."""
 
 import numpy as np
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix, csc_matrix
 
 from . import utils as ut
 
 
-def get_log_proba(observations, entity_stats, token_frequencies, strength):
-    r"""Compute log observation probabilities.
+class SparseBetaBernoulliModel:
+    def __init__(self, entities, token_frequencies, strength):
+        self.entities = entities
+        self.alpha = (strength * token_frequencies).astype(np.float32)
+        self.beta = (strength * (1. - token_frequencies)).astype(np.float32)
+        self._build()
 
-    Parameters
-    ----------
-    observations : scipy.sparse.csr_matrix
-        binary document-term matrix for observations
-    entity_stats : EntityStats
-        Entity-level word count statistics
-    token_frequencies : numpy.ndarray
-        prior token probabilities ($\pi_t$ in maths part)
-    strength : numpy.ndarray
-        prior strength parameter ($s_t$ in maths part)
-    """
-    counts = entity_stats.counts
-    n_tokens = observations.shape[1]
-    n_obs = entity_stats.n_observations
-    max_observations = n_obs.max()
+    def _build(self):
+        """Get observation-independent data structures for observation likelihood."""
+        counts, n_observations = self.entities.counts, self.entities.n_observations
+        alpha, beta = self.alpha, self.beta
 
-    # compute p^0_t for all relevant n
-    p0 = np.zeros((max_observations + 1, n_tokens), dtype=np.float32)
-    n = np.arange(max_observations + 1, dtype=np.float32)[:, None]
-    p0 = (strength * token_frequencies)[None, :] / (strength[None, :] + n)
+        # compute p^0_t for all relevant n
+        max_observations = n_observations.max()
+        n = np.arange(max_observations + 1, dtype=np.float32)[None, :]
+        p0 = alpha[:, None] / (alpha[:, None] + beta[:, None] + n)
 
-    # k-independent terms
-    unconstrained_term = np.log(1. - p0).sum(axis=1)
+        # count-independent term
+        unconstrained_term = np.log(1. - p0).sum(axis=0)
 
-    # k-dependent terms
-    k = counts.data  # count vectors
-    n = n_obs[ut.sparse_row_indices(counts)]  # observation numbers
-    t = counts.indices  # token indices
+        # count-dependent terms
+        k = counts.data  # count vectors
+        n = n_observations[ut.sparse_row_indices(counts)]  # observation numbers
+        t = counts.indices  # token indices
 
-    alpha = strength[t] * token_frequencies[t]
-    beta = strength[t] * (1. - token_frequencies)[t]
+        t_in_k_cap_x_term = csr_matrix(
+            (np.log((beta[t] + n) / (beta[t] + n - k)), counts.indices, counts.indptr),
+            shape=counts.shape
+        )
+        t_in_k_term = -np.array(t_in_k_cap_x_term.sum(axis=1)).ravel()  # note the minus
+        t_in_k_cap_x_term.data += np.log((alpha[t] + k) / alpha[t])
 
-    # interleave these two terms so that results can be shared
-    t_in_k_cap_x_term = csr_matrix(
-        (np.log((beta + n) / (beta + n - k)), counts.indices, counts.indptr),
-        shape=counts.shape
-    )
-    t_in_k_term = -np.array(t_in_k_cap_x_term.sum(axis=1)).ravel()  # note the minus
-    t_in_k_cap_x_term.data += np.log((alpha + k) / alpha)
+        self._p0_log_odds = np.log(p0 / (1. - p0))
+        self._t_in_k_cap_x_term = csr_matrix(t_in_k_cap_x_term.T)
+        self._t_in_k_term = t_in_k_term
+        self._unconstrained_term = unconstrained_term
 
-    # everything above can be precomputed
-    # \sum_{t \in observations \cap k}
-    log_proba = observations.dot(t_in_k_cap_x_term.T)
-    # \sum_{t \in k}
-    log_proba.data += t_in_k_term[log_proba.indices]
-    # \sum_{t \in x}
-    n = n_obs[log_proba.indices]
-    t_in_x_term = observations.dot(np.log(p0 / (1. - p0)).T)
-    row = ut.sparse_row_indices(log_proba)
-    log_proba.data += t_in_x_term[row, n]
-    # \sum_t
-    log_proba.data += unconstrained_term[n]
+    def get_log_proba(self, observations):
+        """Compute log observation probabilites of observations."""
+        # \sum_{t \in x \cap k}
+        log_proba = observations.dot(self._t_in_k_cap_x_term)
+        # \sum_{t \in k}
+        log_proba.data += self._t_in_k_term[log_proba.indices]
+        # \sum_{t \in x}
+        n = self.entities.n_observations[log_proba.indices]
+        t_in_x_term = observations.dot(self._p0_log_odds)
+        row = ut.sparse_row_indices(log_proba)
+        log_proba.data += t_in_x_term[row, n]
+        # \sum_t
+        log_proba.data += self._unconstrained_term[n]
 
-    return log_proba
+        return log_proba
 
 
 def get_log_prior(observations, token_frequencies):
