@@ -2,7 +2,7 @@
 
 from autograd.scipy.special import gammaln
 
-from ..utils import damped_update
+from .utils import damped_update
 
 
 def beta_log_normalizer(alpha, beta):

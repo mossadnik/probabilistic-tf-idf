@@ -3,7 +3,7 @@
 import numpy as np
 from scipy.sparse import csr_matrix
 
-from .. import utils as ut
+from . import utils as ut
 
 
 class EntityStatistics(object):

@@ -3,7 +3,7 @@
 import numpy as np
 from scipy.sparse import csr_matrix
 
-from ptfidf.train import aggregation as agg
+from ptfidf import aggregation as agg
 
 
 def test_group_statistics():

@@ -3,8 +3,8 @@
 import numpy as np
 
 
-from ptfidf.train.inference import map_estimate
-from ptfidf.train.aggregation import TokenStatistics
+from ptfidf.inference import map_estimate
+from ptfidf.aggregation import TokenStatistics
 
 
 def test_map_estimate_easy():
