@@ -3,18 +3,21 @@
 import numpy as np
 from scipy.sparse import csr_matrix, csc_matrix
 
+from .signals import Observer, check_uptodate
 from . import utils as ut
-from .likelihood import BetaParameters
 
 
-class SparseBetaBernoulliModel:
+class SparseBetaBernoulliModel(Observer):
     def __init__(self, entities, prior):
+        super().__init__()
         self.entities = entities
         self.prior = prior
-        self.build()
+        self.prior.subscribe(self)
+        self.entities.subscribe(self)
 
-    def build(self):
+    def update(self):
         """Get observation-independent data structures for observation likelihood."""
+        self.uptodate = True
         counts, n_observations = self.entities.counts, self.entities.n_observations
         alpha, beta = self.prior.alpha, self.prior.beta
 
@@ -38,10 +41,11 @@ class SparseBetaBernoulliModel:
         t_in_k_cap_x_term.data += np.log((alpha[t] + k) / alpha[t])
 
         self._p0_log_odds = np.log(p0 / (1. - p0))
-        self._t_in_k_cap_x_term = csr_matrix(t_in_k_cap_x_term.T)
+        self._t_in_k_cap_x_term = csc_matrix(t_in_k_cap_x_term.T)
         self._t_in_k_term = t_in_k_term
         self._unconstrained_term = unconstrained_term
 
+    @check_uptodate
     def get_log_proba(self, observations):
         """Compute log observation probabilites of observations."""
         # \sum_{t \in x \cap k}
@@ -58,6 +62,7 @@ class SparseBetaBernoulliModel:
 
         return log_proba
 
+    @check_uptodate
     def get_log_prior(self, observations):
         """Compute log-prior of observations.
 

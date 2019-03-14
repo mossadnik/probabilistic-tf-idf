@@ -6,7 +6,7 @@ from scipy.special import gammaln
 
 from ptfidf.observation_model import SparseBetaBernoulliModel
 from ptfidf.aggregation import EntityStatistics
-from ptfidf.likelihood import BetaParameters
+from ptfidf.inference import BetaParameters
 
 
 def beta_log_normalizer(a, b):
@@ -56,7 +56,7 @@ def test_model_get_log_proba():
             if u.dot(v) > 0:
                 expected[i, j] = expected_log_proba(u, v, n, alpha, beta)
 
-    prior = BetaParameters(frequency=pi, strength=s)
+    prior = BetaParameters(mean=pi, strength=s)
     entity_stats = EntityStatistics(csr_matrix(counts), n_obs)
     model = SparseBetaBernoulliModel(entity_stats, prior)
     actual = model.get_log_proba(csr_matrix(X)).toarray()

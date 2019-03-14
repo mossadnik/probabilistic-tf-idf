@@ -4,11 +4,13 @@ import numpy as np
 from scipy.sparse import csr_matrix
 
 from . import utils as ut
+from .signals import Observable
 
 
-class EntityStatistics(object):
+class EntityStatistics(Observable):
     """Container for entity-level sufficient statistics."""
     def __init__(self, counts, n_observations):
+        super().__init__()
         self.counts = counts
         self.n_observations = n_observations
 
@@ -27,6 +29,7 @@ class EntityStatistics(object):
             raise ValueError('Incompatible shapes.')
         self.counts += other.counts
         self.n_observations += other.n_observations
+        self._notify()
         return self
 
     def copy(self):

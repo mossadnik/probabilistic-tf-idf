@@ -29,7 +29,7 @@ def test_map_estimate_easy():
 
     beta_params = map_estimate(TokenStatistics(n, k, weights), prior_mean, 1.)
 
-    assert np.allclose(beta_params.frequency, expected_pi)
+    assert np.allclose(beta_params.mean, expected_pi)
     assert np.allclose(beta_params.strength, expected_s)
 
 
@@ -55,5 +55,5 @@ def test_map_estimate_weight_deduplication():
 
     beta_params = map_estimate(TokenStatistics(n, k, weights), prior_mean, 1.)
 
-    assert np.allclose(beta_params.frequency, expected_pi)
+    assert np.allclose(beta_params.mean, expected_pi)
     assert np.allclose(beta_params.strength, expected_s)

@@ -10,7 +10,9 @@ from scipy.optimize import minimize
 import autograd.numpy as anp
 from autograd import grad
 
-from .likelihood import beta_binomial_log_likelihood, BetaParameters
+from .likelihood import beta_binomial_log_likelihood
+from .utils import damped_update
+from .signals import Observable
 
 
 def _pack(pi, s):
@@ -75,4 +77,36 @@ def map_estimate(token_stats, prior_mean, prior_std, s_init=None, pi_init=None):
     # postprocessing: map compressed parameters back
     pi, s = _unpack(res.x)
 
-    return BetaParameters(pi[inverse], s[inverse])
+    return BetaParameters(mean=pi[inverse], strength=s[inverse])
+
+
+class BetaParameters(Observable):
+    """Container for parameters of Beta distribution."""
+    def __init__(self, alpha=None, beta=None, mean=None, strength=None):
+        """
+        Use either (alpha, beta) or (mean, strength). If both are given,
+        the first take precedence.
+        """
+        super().__init__()
+        if alpha is not None and beta is not None:
+            self.alpha = alpha
+            self.beta = beta
+        else:
+            self.alpha = strength * mean
+            self.beta = strength * (1 - mean)
+
+    def damped_update(self, other, fraction=1.):
+        """Update parameters."""
+        for p in ['alpha', 'beta']:
+            damped_update(getattr(self, p), getattr(other, p), fraction)
+        self._notify()
+
+    @property
+    def mean(self):
+        """get mean parameter"""
+        return self.alpha / (self.alpha + self.beta)
+
+    @property
+    def strength(self):
+        """get strength parameter"""
+        return self.alpha + self.beta
