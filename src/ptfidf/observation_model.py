@@ -3,21 +3,29 @@
 import numpy as np
 from scipy.sparse import csr_matrix, csc_matrix
 
-from .signals import Observer, check_uptodate
 from . import utils as ut
 
 
-class SparseBetaBernoulliModel(Observer):
+class SparseBetaBernoulliModel:
+    """Beta-Bernoulli model for sparse binary vectors."""
     def __init__(self, entities, prior):
-        super().__init__()
-        self.entities = entities
-        self.prior = prior
-        self.prior.subscribe(self)
-        self.entities.subscribe(self)
+        self._entities = entities
+        self._prior = prior
+        self._initialize()
 
-    def update(self):
+    @property
+    def entities(self):
+        """return entities."""
+        return self._entities
+
+    @property
+    def prior(self):
+        """return token-level prior."""
+        return self._prior
+
+    def _initialize(self):
         """Get observation-independent data structures for observation likelihood."""
-        self.uptodate = True
+
         counts, n_observations = self.entities.counts, self.entities.n_observations
         alpha, beta = self.prior.alpha, self.prior.beta
 
@@ -45,7 +53,6 @@ class SparseBetaBernoulliModel(Observer):
         self._t_in_k_term = t_in_k_term
         self._unconstrained_term = unconstrained_term
 
-    @check_uptodate
     def get_log_proba(self, observations):
         """Compute log observation probabilites of observations."""
         # \sum_{t \in x \cap k}
@@ -62,7 +69,6 @@ class SparseBetaBernoulliModel(Observer):
 
         return log_proba
 
-    @check_uptodate
     def get_log_prior(self, observations):
         """Compute log-prior of observations.
 

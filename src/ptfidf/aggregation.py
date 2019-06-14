@@ -4,11 +4,10 @@ import numpy as np
 from scipy.sparse import csr_matrix
 
 from . import utils as ut
-from .signals import Observable
 
 
-class EntityStatistics(Observable):
-    """Container for entity-level sufficient statistics."""
+class EntityStatistics:
+    """Entity-level sufficient statistics."""
     def __init__(self, counts, n_observations):
         super().__init__()
         self.counts = counts
@@ -29,7 +28,6 @@ class EntityStatistics(Observable):
             raise ValueError('Incompatible shapes.')
         self.counts += other.counts
         self.n_observations += other.n_observations
-        self._notify()
         return self
 
     def copy(self):
@@ -41,7 +39,9 @@ class EntityStatistics(Observable):
         # group by (token, (n, k)) and count
         rows = ut.sparse_row_indices(self.counts)
         groups, cnt = np.unique(
-            np.r_[self.counts.indices[None, :], _nk2idx(self.n_observations[rows], self.counts.data)[None, :]],
+            np.r_[
+                self.counts.indices[None, :],
+                _nk2idx(self.n_observations[rows], self.counts.data)[None, :]],
             return_counts=True,
             axis=1)
 
@@ -61,7 +61,8 @@ class EntityStatistics(Observable):
         _, n_observations_counts = np.unique(self.n_observations, return_counts=True)
         bnd = bnd = np.concatenate([np.searchsorted(full_index, zero_index), [full_index.size]])
         for i in range(bnd.size - 1):
-            weights[:, bnd[i]] = n_observations_counts[i] - weights[:, bnd[i]:bnd[i + 1]].sum(axis=1)
+            weights[:, bnd[i]] = (
+                n_observations_counts[i] - weights[:, bnd[i]:bnd[i + 1]].sum(axis=1))
         return TokenStatistics(n, k, weights)
 
 
@@ -86,8 +87,8 @@ def get_entity_statistics(observations, assignments, n_classes=None):
     n = assignments.size
     if n_classes is None:
         n_classes = assignments.max() + 1
-    dt = np.int32
-    data, row, col = np.ones(n, dtype=dt), assignments.astype(dt), np.arange(n, dtype=dt)
+    dtype = np.int32
+    data, row, col = np.ones(n, dtype=dtype), assignments.astype(dtype), np.arange(n, dtype=dtype)
     assignments_mat = csr_matrix((data, (row, col)), shape=(n_classes, observations.shape[0]))
     counts = assignments_mat.dot(observations)
     n_observations = np.array(assignments_mat.sum(axis=1)).ravel()
@@ -111,7 +112,7 @@ def _idx2nk(idx):
 
 
 class TokenStatistics(object):
-    """Container for token-level sufficient statistics."""
+    """Token-level sufficient statistics."""
     def __init__(self, n, k, weights):
         self.n = n
         self.k = k

@@ -9,7 +9,6 @@ from scipy.optimize import minimize
 
 from .likelihood import beta_binomial_log_likelihood, grad_beta_binomial_log_likelihood
 from .utils import update
-from .signals import Observable
 
 
 def _pack(pi, s):
@@ -23,7 +22,7 @@ def _unpack(x):
     return pi, s
 
 
-def loss(x, n, k, weights, multiplicities, prior_mean, prior_std):
+def _loss(x, n, k, weights, multiplicities, prior_mean, prior_std):
     pi, s = _unpack(x)
     alpha, beta = pi * s, (1 - pi) * s
     res = -beta_binomial_log_likelihood(alpha[:, None], beta[:, None], k[None, :], n[None, :])
@@ -35,7 +34,7 @@ def loss(x, n, k, weights, multiplicities, prior_mean, prior_std):
     return res.sum()
 
 
-def loss_grad(x, n, k, weights, multiplicities, prior_mean, prior_std):
+def _loss_grad(x, n, k, weights, multiplicities, prior_mean, prior_std):
     pi, s = _unpack(x)
     alpha, beta = pi * s, (1 - pi) * s
     grad_ab = -grad_beta_binomial_log_likelihood(alpha[:, None], beta[:, None], k[None, :], n[None, :])
@@ -66,6 +65,28 @@ def _initialize_pi(token_stats, strength):
 
 
 def map_estimate(token_stats, prior_mean, prior_std, s_init=None, pi_init=None):
+    """Compute MAP estimate of token-level prior parameters.
+
+    Parameters
+    ----------
+    token_stats : ptfidf.aggregation.TokenStatistics
+        Token-level statistics.
+    prior_mean : float
+        Prior mean of log(s). s has a log-normal prior
+        distribution.
+    prior_std : float
+        Prior standard deviation of log(s).
+    s_init : numpy.ndarray, optional
+        Initial value for strength parameter. Defaults to prior mean.
+    pi_init : numpy.ndarray, optional
+        Initial value for mean parameter. Defaults to a heuristic based
+        on the strength parameter and token_stats.
+
+    Returns
+    -------
+    ptfidf.inference.BetaParameters
+        Estimated parameters.
+    """
     # unique weights for saving multiple computation
     weights, index, inverse, multiplicities = np.unique(
         token_stats.weights,
@@ -77,10 +98,10 @@ def map_estimate(token_stats, prior_mean, prior_std, s_init=None, pi_init=None):
     pi = _initialize_pi(token_stats, s) if pi_init is None else pi_init
 
     res = minimize(
-        loss,
+        _loss,
         _pack(pi[index], s[index]),
         args=(token_stats.n, token_stats.k, weights, multiplicities, prior_mean, prior_std),
-        jac=loss_grad,
+        jac=_loss_grad,
         method='L-BFGS-B')
 
     if not res.success:
@@ -89,14 +110,13 @@ def map_estimate(token_stats, prior_mean, prior_std, s_init=None, pi_init=None):
     return BetaParameters(mean=pi[inverse], strength=s[inverse])
 
 
-class BetaParameters(Observable):
+class BetaParameters:
     """Container for parameters of Beta distribution."""
     def __init__(self, alpha=None, beta=None, mean=None, strength=None):
         """
         Use either (alpha, beta) or (mean, strength). If both are given,
         the first take precedence.
         """
-        super().__init__()
         if alpha is not None and beta is not None:
             self.alpha = alpha
             self.beta = beta
@@ -108,7 +128,6 @@ class BetaParameters(Observable):
         """Update parameters."""
         for p in ['alpha', 'beta']:
             update(getattr(self, p), getattr(other, p), fraction)
-        self._notify()
 
     @property
     def mean(self):
