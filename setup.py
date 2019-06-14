@@ -14,7 +14,6 @@ def _read(fname):
 requirements = [
     'numpy',
     'scipy',
-    'autograd',
 ]
 
 setup(

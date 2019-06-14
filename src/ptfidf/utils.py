@@ -19,7 +19,7 @@ def sparse_row_indices(mat):
     return res
 
 
-def damped_update(old, new, fraction=1.):
+def update(old, new, fraction=1.):
     """inplace damped update."""
     old *= (1. - fraction)
     old += fraction * new
