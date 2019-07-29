@@ -129,7 +129,19 @@ class TokenStatistics(object):
 
 
     def add(self, other):
-        """Merge counts, add weights."""
+        """Merge EntityStatistics by summing sufficient statistics.
+
+        This is an inplace operation.
+
+        Parameters
+        ----------
+        other : ptfidf.aggregation.EntityStatistics
+            Sufficient statistics to add.
+
+        Returns
+        -------
+        self
+        """
         if self.size != other.size:
             raise ValueError('Shape mismatch: number of token differs.')
         idx_self = _nk2idx(self.n, self.k)
