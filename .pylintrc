@@ -423,7 +423,8 @@ good-names=i,
            n,
            k,
            pi,
-           s
+           s,
+           X
 
 
 # Include a hint for the correct naming format with invalid-name.

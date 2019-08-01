@@ -22,7 +22,7 @@ def test_group_statistics():
         [1, 0, 0]])
     expected_nobs = np.array([1, 2, 1])
 
-    actual = agg.get_entity_statistics(csr_matrix(X), y)
+    actual = agg.EntityStatistics.from_observations(csr_matrix(X), y)
 
     assert np.all(expected_counts == actual.counts.toarray()), 'counts do not match'
     assert np.all(actual.n_observations == expected_nobs), 'n_observations does not match'
@@ -45,13 +45,14 @@ def test_get_token_statistics():
         [2, 0, 1, 0, 0]
     ])
 
-    token_stats = entity_stats.get_token_statistics()
+    token_stats = agg.TokenStatistics.from_entity_statistics(entity_stats)
 
     assert np.all(token_stats.n == expected_n)
     assert np.all(token_stats.k == expected_k)
     assert np.allclose(token_stats.weights, expected_weights)
 
 
+# pylint: disable=protected-access
 def test_idx2nk():
     """Test conversion between (n, k) and integer index."""
     n = np.array([1, 1, 2, 2, 2, 3, 3, 3, 3])
@@ -64,6 +65,7 @@ def test_idx2nk():
     n_actual, k_actual = agg._idx2nk(idx)
     assert np.all(n_actual == n)
     assert np.all(k_actual == k)
+# pylint: enable=protected-access
 
 
 def test_add_token_statistics_index():
