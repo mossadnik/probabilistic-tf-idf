@@ -6,18 +6,19 @@ import warnings
 
 import numpy as np
 from scipy.optimize import minimize
+from scipy.special import expit, logit
 
 from .likelihood import beta_binomial_log_likelihood, grad_beta_binomial_log_likelihood
 from .utils import update
 
 
 def _pack(pi, s):
-    return np.concatenate([np.log(pi / (1. - pi)), np.log(s)])
+    return np.concatenate([logit(pi), np.log(s)])
 
 
 def _unpack(x):
     n = x.size // 2
-    pi = 1. / (1. + np.exp(-x[:n]))
+    pi = expit(x[:n])
     s = np.exp(x[n:])
     return pi, s
 
