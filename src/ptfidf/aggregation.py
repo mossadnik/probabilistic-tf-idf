@@ -129,13 +129,13 @@ class TokenStatistics(object):
 
 
     def add(self, other):
-        """Merge EntityStatistics by summing sufficient statistics.
+        """Merge TokenStatistics by summing sufficient statistics.
 
         This is an inplace operation.
 
         Parameters
         ----------
-        other : ptfidf.aggregation.EntityStatistics
+        other : ptfidf.aggregation.TokenStatistics
             Sufficient statistics to add.
 
         Returns
