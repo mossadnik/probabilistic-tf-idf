@@ -1,0 +1,8 @@
+-e .
+# for running examples
+jupyter
+pandas
+matplotlib
+scikit-learn
+requests
+pylint

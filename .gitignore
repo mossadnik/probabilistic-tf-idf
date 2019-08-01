@@ -4,7 +4,6 @@
 __pycache__/
 .cache/
 *.pyc
-*.txt
 
 /.tox
 /.python-version
