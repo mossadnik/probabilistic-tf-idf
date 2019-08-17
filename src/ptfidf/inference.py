@@ -8,7 +8,7 @@ import numpy as np
 from scipy.optimize import minimize
 from scipy.special import expit, logit
 
-from .likelihood import beta_binomial_log_likelihood, grad_beta_binomial_log_likelihood
+from .likelihood import beta_binomial_log_likelihood, beta_binomial_log_likelihood_grad
 from .utils import update
 
 
@@ -23,23 +23,21 @@ def _unpack(x):
     return pi, s
 
 
-def _loss(x, n, k, weights, multiplicities, prior_mean, prior_std):
+def _loss(x, weights, weights_n, prior_mean, prior_std):
     pi, s = _unpack(x)
     alpha, beta = pi * s, (1 - pi) * s
-    res = -beta_binomial_log_likelihood(alpha[:, None], beta[:, None], k[None, :], n[None, :])
-    res = np.sum(res * weights, axis=1)
+    res = -beta_binomial_log_likelihood(alpha, beta, weights, weights_n)
     # prior
     res += .5 * (np.log(s) - prior_mean)**2 / prior_std**2
-    # weight multiplicity
-    res *= multiplicities
     return res.sum()
 
 
-def _loss_grad(x, n, k, weights, multiplicities, prior_mean, prior_std):
+def _loss_grad(x, weights, weights_n, prior_mean, prior_std):
     pi, s = _unpack(x)
+    # gradient for alpha, beta
     alpha, beta = pi * s, (1 - pi) * s
-    grad_ab = -grad_beta_binomial_log_likelihood(alpha[:, None], beta[:, None], k[None, :], n[None, :])
-    grad_ab = np.sum(grad_ab * weights, axis=-1)
+    grad_ab = -beta_binomial_log_likelihood_grad(alpha, beta, weights, weights_n)
+    # transformations
     grad = np.empty_like(grad_ab)
     # pi / s
     grad[0] = s * (grad_ab[0] - grad_ab[1])
@@ -49,20 +47,14 @@ def _loss_grad(x, n, k, weights, multiplicities, prior_mean, prior_std):
     grad[1] *= s
     # prior
     grad[1] += (np.log(s) - prior_mean) / prior_std**2
-    # weight multiplicity
-    grad *= multiplicities[None, :]
     return grad.ravel()
 
 
-def _initialize_pi(token_stats, strength):
-    """Guess beta-binomial optimal mean parameter given strength.
-
-    Loosely based on Sec. 4.1 in
-    https://tminka.github.io/papers/dirichlet/minka-dirichlet.pdf
-    """
-    n, k, w = token_stats.n, token_stats.k, token_stats.weights
-    a = 1. / (1. + 1. / strength[:, None])  # interpolate count damping
-    return np.sum(w * k**a, axis=1) / np.sum(w * (k**a + (n - k)**a), axis=1)
+def init_beta_binomial_proba(weights, a0=0., b0=0.):
+    """Initialize frequencies with smoothed empirical means."""
+    n_max = weights.shape[-1]
+    counts = np.sum(weights * np.arange(1, n_max + 1)[None, None, :], axis=-1)
+    return (a0 + counts[:, 0]) / (a0 + b0 + counts.sum(axis=1))
 
 
 def map_estimate(token_stats, prior_mean, prior_std, s_init=None, pi_init=None):
@@ -89,19 +81,20 @@ def map_estimate(token_stats, prior_mean, prior_std, s_init=None, pi_init=None):
         Estimated parameters.
     """
     # unique weights for saving multiple computation
-    weights, index, inverse, multiplicities = np.unique(
+    weights_n = token_stats.weights_n
+    weights, index, inverse = np.unique(
         token_stats.weights,
         axis=0,
         return_index=True,
-        return_inverse=True,
-        return_counts=True)
+        return_inverse=True
+    )
     s = np.exp(prior_mean) * np.ones(token_stats.size) if s_init is None else s_init
-    pi = _initialize_pi(token_stats, s) if pi_init is None else pi_init
+    pi = init_beta_binomial_proba(token_stats.weights) if pi_init is None else pi_init
 
     res = minimize(
         _loss,
         _pack(pi[index], s[index]),
-        args=(token_stats.n, token_stats.k, weights, multiplicities, prior_mean, prior_std),
+        args=(weights, weights_n, prior_mean, prior_std),
         jac=_loss_grad,
         method='L-BFGS-B')
 

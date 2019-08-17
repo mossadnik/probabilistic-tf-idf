@@ -6,8 +6,8 @@ from scipy.sparse import csr_matrix
 from ptfidf import aggregation as agg
 
 
-def test_group_statistics():
-    """check group aggregation on small example."""
+def test_entity_statistics_from_observations():
+    """check entity aggregation on small example."""
     X = np.array([
         [1, 0, 0],
         [0, 1, 0],
@@ -24,12 +24,30 @@ def test_group_statistics():
 
     actual = agg.EntityStatistics.from_observations(csr_matrix(X), y)
 
-    assert np.all(expected_counts == actual.counts.toarray()), 'counts do not match'
-    assert np.all(actual.n_observations == expected_nobs), 'n_observations does not match'
+    assert np.all(expected_counts == actual.counts.toarray())
+    assert np.all(actual.n_observations == expected_nobs)
 
 
-def test_get_token_statistics():
-    """check aggregation on small example."""
+def test_token_statistics_from_observations():
+    observations = np.array([
+        [1, 0, 0],
+        [1, 1, 0],
+        [0, 1, 1],
+    ])
+
+    expected_max_count = 1
+    expected_pos_weights = np.sum(observations, axis=0).reshape((-1, 1))
+    expected_neg_weights = np.sum(1 - observations, axis=0).reshape((-1, 1))
+
+    token_stats = agg.TokenStatistics.from_observations(csr_matrix(observations))
+
+    assert token_stats.max_count == expected_max_count
+    assert np.all(token_stats.weights[:, 0, :] == expected_pos_weights)
+    assert np.all(token_stats.weights[:, 1, :] == expected_neg_weights)
+
+
+def test_token_statistics_from_entity_statistics():
+    """Test aggregation for basic case."""
     counts = np.array([
         [1, 1, 0],
         [1, 2, 0],
@@ -37,54 +55,61 @@ def test_get_token_statistics():
     nobs = np.array([1, 3, 1])
     entity_stats = agg.EntityStatistics(csr_matrix(counts), nobs)
 
-    expected_n = np.array([1, 1, 3, 3, 3])
-    expected_k = np.array([0, 1, 0, 1, 2])
-    expected_weights = np.array([
-        [0, 2, 0, 1, 0],
-        [1, 1, 0, 0, 1],
-        [2, 0, 1, 0, 0]
+    expected_max_count = entity_stats.n_observations.max()
+    # weights_n contains counts of entity_stats.n_observations
+    expected_n_weights = np.array([2, 0, 1])
+
+    # counts of
+    #   entity_stats.counts
+    # per token
+    expected_pos_counts = np.array([
+        [3, 0, 0],
+        [1, 1, 0],
+        [0, 0, 0],
+    ])
+
+    # counts of
+    #   entity_stats.n_observations[:, None] - entity_stats.counts()
+    # per token
+    expected_neg_counts = np.array([
+        [0, 1, 0],
+        [2, 0, 0],
+        [2, 0, 1],
     ])
 
     token_stats = agg.TokenStatistics.from_entity_statistics(entity_stats)
 
-    assert np.all(token_stats.n == expected_n)
-    assert np.all(token_stats.k == expected_k)
-    assert np.allclose(token_stats.weights, expected_weights)
+    assert token_stats.max_count == expected_max_count
+    assert np.all(token_stats.weights_n == expected_n_weights)
+    assert np.all(token_stats.weights[:, 0, :] == expected_pos_counts)
+    assert np.all(token_stats.weights[:, 1, :] == expected_neg_counts)
 
 
-# pylint: disable=protected-access
-def test_idx2nk():
-    """Test conversion between (n, k) and integer index."""
-    n = np.array([1, 1, 2, 2, 2, 3, 3, 3, 3])
-    k = np.array([0, 1, 0, 1, 2, 0, 1, 2, 3])
-    expected_idx = np.arange(n.size)
+def test_add_token_statistics():
+    """Test adding TokenStatistics gives the same result as concatenating entities."""
+    left_counts = np.array([
+        [1, 1, 0, 0],
+        [0, 1, 1, 2]
+    ])
+    left_nobs = np.array([1, 2])
+    left_entity_stats = agg.EntityStatistics(csr_matrix(left_counts), left_nobs)
 
-    idx = agg._nk2idx(n, k)
-    assert np.all(idx == expected_idx)
+    right_counts = np.array([
+        [0, 1, 0, 1],
+        [3, 0, 0, 0],
+    ])
+    right_nobs = np.array([1, 3])
+    right_entity_stats = agg.EntityStatistics(csr_matrix(right_counts), right_nobs)
 
-    n_actual, k_actual = agg._idx2nk(idx)
-    assert np.all(n_actual == n)
-    assert np.all(k_actual == k)
-# pylint: enable=protected-access
+    summed_entity_stats = agg.EntityStatistics(
+        csr_matrix(np.concatenate([left_counts, right_counts], axis=0)),
+        np.concatenate([left_nobs, right_nobs])
+    )
+    expected_token_stats = agg.TokenStatistics.from_entity_statistics(summed_entity_stats)
 
+    left_token_stats = agg.TokenStatistics.from_entity_statistics(left_entity_stats)
+    right_token_stats = agg.TokenStatistics.from_entity_statistics(right_entity_stats)
+    actual_token_stats = left_token_stats.add(right_token_stats)
 
-def test_add_token_statistics_index():
-    """Test merging when indices differ."""
-    left = agg.TokenStatistics(
-        np.array([1, 1]),
-        np.array([0, 1]),
-        np.array([[1, 2]]))
-
-    right = agg.TokenStatistics(
-        np.array([1, 1, 2, 2, 3]),
-        np.array([0, 1, 0, 1, 1]),
-        np.array([[3, 5, 8, 9, 10]]))
-
-    expected_n = np.array([1, 1, 2, 2, 3])
-    expected_k = np.array([0, 1, 0, 1, 1])
-    expected_weights = np.array([[4, 7, 8, 9, 10]])
-
-    left.add(right)
-    assert np.all(left.n == expected_n)
-    assert np.all(left.k == expected_k)
-    assert np.all(left.weights == expected_weights)
+    assert np.all(expected_token_stats.weights_n == actual_token_stats.weights_n)
+    assert np.all(expected_token_stats.weights == actual_token_stats.weights)
