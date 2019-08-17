@@ -2,8 +2,6 @@
 MAP estimation
 """
 
-import warnings
-
 import numpy as np
 from scipy.optimize import minimize
 from scipy.special import expit, logit
@@ -13,10 +11,12 @@ from .utils import update
 
 
 def _pack(pi, s):
+    """Convert params for optimizer."""
     return np.concatenate([logit(pi), np.log(s)])
 
 
 def _unpack(x):
+    """Convert optimizer vector to params."""
     n = x.size // 2
     pi = expit(x[:n])
     s = np.exp(x[n:])
@@ -99,7 +99,7 @@ def map_estimate(token_stats, prior_mean, prior_std, s_init=None, pi_init=None):
         method='L-BFGS-B')
 
     if not res.success:
-        warnings.warn('failed to converge')
+        raise RuntimeError('Optimization failed to converge.')
     pi, s = _unpack(res.x)
     return BetaParameters(mean=pi[inverse], strength=s[inverse])
 

@@ -96,10 +96,10 @@ class TokenStatistics:
     @classmethod
     def from_observations(cls, observations):
         """Aggregate observations to token level."""
-        n_rows = observations.shape[0]
+        n_rows, n_cols = observations.shape
         weights_n = np.array([n_rows], dtype=np.int32)
 
-        weights = np.zeros((n_rows, 2, 1), dtype=np.int32)
+        weights = np.zeros((n_cols, 2, 1), dtype=np.int32)
         counts = np.array(observations.sum(axis=0)).ravel()
         weights[:, 0, 0] = counts
         weights[:, 1, 0] = n_rows - counts

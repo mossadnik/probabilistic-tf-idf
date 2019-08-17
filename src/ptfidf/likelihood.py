@@ -32,7 +32,7 @@ def beta_binomial_log_likelihood_grad(alpha, beta, weights, weights_n):
     kw = dict(deriv=1, n=weights_n.size)
 
     res = np.empty((2, alpha.size))
-    res[0] = np.sum(weights[:, 0] * cum_log_gamma_ratio(alpha, **kw))
-    res[1] = np.sum(weights[:, 1] * cum_log_gamma_ratio(beta, **kw))
+    res[0] = np.sum(weights[:, 0] * cum_log_gamma_ratio(alpha, **kw), axis=-1)
+    res[1] = np.sum(weights[:, 1] * cum_log_gamma_ratio(beta, **kw), axis=-1)
     res -= cum_log_gamma_ratio(alpha + beta, **kw).dot(weights_n)[None, :]
     return res

@@ -33,6 +33,7 @@ def test_token_statistics_from_observations():
         [1, 0, 0],
         [1, 1, 0],
         [0, 1, 1],
+        [0, 0, 1],
     ])
 
     expected_max_count = 1
