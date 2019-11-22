@@ -41,8 +41,8 @@ class EntityStatistics:
         return cls(counts, n_observations)
 
     @property
-    def n_features(self):
-        """Get number of binary features."""
+    def n_tokens(self):
+        """Get number of distinct tokens."""
         return self.counts.shape[1]
 
     @property
