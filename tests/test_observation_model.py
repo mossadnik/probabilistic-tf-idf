@@ -6,7 +6,7 @@ from scipy.special import gammaln
 
 from ptfidf.observation_model import SparseBetaBernoulliModel
 from ptfidf.aggregation import EntityStatistics
-from ptfidf.inference import BetaParameters
+from ptfidf.inference import BetaDist
 
 
 def beta_log_normalizer(a, b):
@@ -27,10 +27,9 @@ def expected_log_proba(x, k, n, alpha, beta):
 
     Z(alpha, beta) = Gamma(alpha) * Gamma(beta) / Gamma(alpha + beta)
     """
-    a, b = alpha, beta
     return np.sum(
-        beta_log_normalizer(a + x + k, b + n + 1 - k - x) -
-        beta_log_normalizer(a + k, b + n - k))
+        beta_log_normalizer(alpha + x + k, beta + n + 1 - k - x) -
+        beta_log_normalizer(alpha + k, beta + n - k))
 
 
 def test_model_get_log_proba():
@@ -48,6 +47,7 @@ def test_model_get_log_proba():
     s = np.array([.1, 1., .1])
 
     # expected result: log-likelihood if at least one token matches, else zero
+    # pylint: disable=invalid-name, unsubscriptable-object
     alpha, beta = s * pi, s * (1 - pi)
     expected = np.zeros((X.shape[0], counts.shape[0]))
     for i in range(X.shape[0]):
@@ -55,8 +55,8 @@ def test_model_get_log_proba():
             u, v, n = X[i], counts[j], n_obs[j]
             if u.dot(v) > 0:
                 expected[i, j] = expected_log_proba(u, v, n, alpha, beta)
-
-    prior = BetaParameters(mean=pi, strength=s)
+    # pylint: enable=invalid-name, unsubscriptable-object
+    prior = BetaDist.from_mean_strength(pi, s)
     entity_stats = EntityStatistics(csr_matrix(counts), n_obs)
     model = SparseBetaBernoulliModel(entity_stats, prior)
     actual = model.get_log_proba(csr_matrix(X)).toarray()

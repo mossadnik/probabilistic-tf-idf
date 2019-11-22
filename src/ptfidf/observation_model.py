@@ -32,23 +32,23 @@ class SparseBetaBernoulliModel:
         # compute p^0_t for all relevant n
         max_observations = n_observations.max()
         n = np.arange(max_observations + 1, dtype=np.float32)[None, :]
-        p0 = alpha[:, None] / (alpha[:, None] + beta[:, None] + n)
+        p_0 = alpha[:, None] / (alpha[:, None] + beta[:, None] + n)
 
         # count-independent term
-        unconstrained_term = np.log(1. - p0).sum(axis=0)
+        unconstrained_term = np.log(1. - p_0).sum(axis=0)
 
         # count-dependent terms
         k = counts.data  # count vectors
         n = n_observations[ut.sparse_row_indices(counts)]  # observation numbers
-        t = counts.indices  # token indices
-
+        token_idx = counts.indices  # token indices
+        values = np.log((beta[token_idx] + n) / (beta[token_idx] + n - k))
         t_in_k_cap_x_term = csr_matrix(
-            (np.log((beta[t] + n) / (beta[t] + n - k)), counts.indices, counts.indptr),
+            (values, counts.indices, counts.indptr),
             shape=counts.shape)
         t_in_k_term = -np.array(t_in_k_cap_x_term.sum(axis=1)).ravel()  # note the minus
-        t_in_k_cap_x_term.data += np.log((alpha[t] + k) / alpha[t])
+        t_in_k_cap_x_term.data += np.log((alpha[token_idx] + k) / alpha[token_idx])
 
-        self._p0_log_odds = np.log(p0 / (1. - p0))
+        self._p0_log_odds = np.log(p_0 / (1. - p_0))
         self._t_in_k_cap_x_term = csc_matrix(t_in_k_cap_x_term.T)
         self._t_in_k_term = t_in_k_term
         self._unconstrained_term = unconstrained_term

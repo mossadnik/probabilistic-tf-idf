@@ -101,27 +101,43 @@ def map_estimate(token_stats, prior_mean, prior_std, s_init=None, pi_init=None):
     if not res.success:
         raise RuntimeError('Optimization failed to converge.')
     pi, s = _unpack(res.x)
-    return BetaParameters(mean=pi[inverse], strength=s[inverse])
+    return BetaDist.from_mean_strength(pi[inverse], s[inverse])
 
 
-class BetaParameters:
-    """Container for parameters of Beta distribution."""
-    def __init__(self, alpha=None, beta=None, mean=None, strength=None):
+class BetaDist:
+    """Container for parameters of Beta distribution.
+
+    To initialize from mean / strength parametrization use
+    `BetaParameters.from_mean_strength`
+
+    Parameters
+    ----------
+    alpha : float or numpy.ndarray
+    beta : float or numpy.ndarray
+    """
+    def __init__(self, alpha, beta):
         """
         Use either (alpha, beta) or (mean, strength). If both are given,
         the first take precedence.
         """
-        if alpha is not None and beta is not None:
-            self.alpha = alpha
-            self.beta = beta
-        else:
-            self.alpha = strength * mean
-            self.beta = strength * (1 - mean)
+        self.alpha = alpha
+        self.beta = beta
+
+    @classmethod
+    def from_mean_strength(cls, mean, strength):
+        """Instantiate using mean-strength parametrization.
+
+        Parameters
+        ----------
+        mean : float or numpy.ndarray
+        strength : float or numpy.ndarray
+        """
+        return cls(mean * strength, (1. - mean) * strength)
 
     def update(self, other, fraction=1.):
         """Update parameters."""
-        for p in ['alpha', 'beta']:
-            update(getattr(self, p), getattr(other, p), fraction)
+        for variable in ['alpha', 'beta']:
+            update(getattr(self, variable), getattr(other, variable), fraction)
 
     @property
     def mean(self):
