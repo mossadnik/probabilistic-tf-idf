@@ -418,13 +418,13 @@ good-names=i,
            j,
            k,
            ex,
-           Run,
            _,
            n,
            k,
            pi,
            s,
-           X
+           X,
+           y
 
 
 # Include a hint for the correct naming format with invalid-name.

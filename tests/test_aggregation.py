@@ -1,4 +1,5 @@
 """Tests for ptfidf.train.aggregation"""
+# pylint: disable=missing-docstring
 
 import numpy as np
 from scipy.sparse import csr_matrix
@@ -19,11 +20,34 @@ def test_entity_statistics_from_observations():
     expected_counts = np.array([
         [1, 0, 0],
         [1, 2, 0],
-        [1, 0, 0]])
+        [1, 0, 0]
+    ])
     expected_nobs = np.array([1, 2, 1])
 
     actual = agg.EntityStatistics.from_observations(csr_matrix(X), y)
 
+    assert np.all(expected_counts == actual.counts.toarray())
+    assert np.all(actual.n_observations == expected_nobs)
+
+
+def test_entity_statistics_extend_tokens():
+    X = np.array([
+        [1, 0, 0],
+        [0, 1, 0],
+        [1, 1, 0],
+        [1, 0, 0],
+    ])
+    y = np.array([0, 1, 1, 2])
+
+    expected_counts = np.array([
+        [1, 0, 0, 0, 0],
+        [1, 2, 0, 0, 0],
+        [1, 0, 0, 0, 0]
+    ])
+    expected_nobs = np.array([1, 2, 1])
+
+    actual = agg.EntityStatistics.from_observations(csr_matrix(X), y)
+    actual.extend_tokens(2)
     assert np.all(expected_counts == actual.counts.toarray())
     assert np.all(actual.n_observations == expected_nobs)
 
