@@ -64,11 +64,8 @@ def map_estimate(token_stats, prior, s_init=None, pi_init=None):
     ----------
     token_stats : ptfidf.aggregation.TokenStatistics
         Token-level statistics.
-    prior_mean : float
-        Prior mean of log(s). s has a log-normal prior
-        distribution.
     prior : ptfidf.inference.NormalDist
-        Prior distribution of strength parameter.
+        Prior distribution of log strength parameter.
     s_init : numpy.ndarray, optional
         Initial value for strength parameter. Defaults to prior mean.
     pi_init : numpy.ndarray, optional
