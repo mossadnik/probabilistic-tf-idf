@@ -1,6 +1,7 @@
 """Containers and aggregation functions for sufficient statistics."""
 
 import numpy as np
+from scipy import sparse
 from scipy.sparse import csr_matrix, hstack
 
 
@@ -100,31 +101,50 @@ class TokenStatistics:
     @classmethod
     def from_entity_statistics(cls, entity_stats):
         """Aggregate EntityStatistics to token level."""
-        vals, cnts = np.unique(entity_stats.n_observations, return_counts=True)
-        n_max = vals[-1]
-        n_entities, n_tokens = entity_stats.counts.shape
-
-        weights_n = np.zeros(n_max + 1, dtype=np.int32)
-        weights_n[vals] = cnts
-
+        _, n_tokens = entity_stats.counts.shape
+        n_obs_vals, n_obs_cnts = np.unique(entity_stats.n_observations, return_counts=True)
+        max_n_obs_count = n_obs_vals[-1]
         counts = entity_stats.counts.tocoo()
 
-        weights = np.zeros((n_tokens, 2, n_max + 1), dtype=np.int32)
-        # positive cases
-        np.add.at(weights, (counts.col, 0, counts.data), 1)
-        weights[:, 0, 0] = n_entities - weights[:, 0].sum(axis=-1)
-
-        # negative cases, copy over n-weights as default
-        weights[:, 1] = weights_n[None, :]
-        # add weights for observed values
-        np.add.at(
-            weights,
-            (counts.col, 1, entity_stats.n_observations[counts.row] - counts.data),
-            1
+        # aggregate positive counts directly
+        # cases with zero positive count are skipped
+        # but can be recovered by summing over rows
+        row = counts.col
+        col = counts.data
+        data = np.ones_like(col)
+        positive_count_weights = sparse.coo_matrix(
+            (data, (row, col)),
+            shape=(n_tokens, max_n_obs_count + 1)
         )
-        # remove default weights for observed values
-        np.add.at(weights, (counts.col, 1, entity_stats.n_observations[counts.row]), -1)
-        return cls(weights_n[1:], weights[:, :, 1:])
+
+        # aggregate negative counts indirectly
+        # 1. Create default case from n_obs_vals, n_obs_counts
+        row = [np.repeat(np.arange(n_tokens), n_obs_vals.size)]
+        col = [np.tile(n_obs_vals, n_tokens)]
+        data = [np.tile(n_obs_cnts, n_tokens)]
+
+        # 2. Subtract cases that have any observations
+        row.append(counts.col)
+        col.append(entity_stats.n_observations[counts.row])
+        data.append(np.full_like(counts.row, -1))
+
+        # 3. Add cases with observations with correct counts
+        row.append(counts.col)
+        col.append(entity_stats.n_observations[counts.row] - counts.data)
+        data.append(np.ones_like(counts.row))
+
+        negative_count_weights = sparse.coo_matrix(
+            (np.concatenate(data), (np.concatenate(row), np.concatenate(col))),
+            shape=(n_tokens, max_n_obs_count + 1)
+        )
+
+        total_weights = np.zeros(n_obs_vals[-1] + 1, counts.dtype)
+        total_weights[n_obs_vals] = n_obs_cnts
+        # backward compatibility: convert to dense format
+        return cls(
+            total_weights[1:],
+            np.concatenate([positive_count_weights.toarray()[:, None, 1:], negative_count_weights.toarray()[:, None, 1:]], axis=1)
+        )
 
     @classmethod
     def from_observations(cls, observations):
@@ -153,7 +173,10 @@ class TokenStatistics:
 
     def copy(self):
         """Create new instance with copied data."""
-        return self.__class__(self.weights_n.copy(), self.weights.copy())
+        return self.__class__(
+            self.weights_n.copy(),
+            self.weights.copy()
+        )
 
     def __repr__(self):
         return 'TokenStatistics(%d tokens)' % self.size
@@ -166,4 +189,4 @@ class TokenStatistics:
     @property
     def max_count(self):
         """Get max number of entity observations."""
-        return self.weights.shape[-1]
+        return self.weights_n.size
