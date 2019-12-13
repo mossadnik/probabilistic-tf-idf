@@ -96,8 +96,8 @@ class TokenStatistics:
     """
     def __init__(self, total_weights, positive_weights, negative_weights):
         self.total_weights = total_weights
-        self.positive_weights = positive_weights
-        self.negative_weights = negative_weights
+        self.positive_weights = sparse.csr_matrix(positive_weights)
+        self.negative_weights = sparse.csr_matrix(negative_weights)
 
     @property
     def weights_n(self):
@@ -114,7 +114,6 @@ class TokenStatistics:
             ],
             axis=1
         )
-
 
     @classmethod
     def from_entity_statistics(cls, entity_stats):
