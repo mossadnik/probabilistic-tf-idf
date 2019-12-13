@@ -94,9 +94,27 @@ class TokenStatistics:
     `TokenStatistics.from_entity_statistics`
     `TokenStatistics.from_observations`
     """
-    def __init__(self, weights_n, weights):
-        self.weights_n = weights_n
-        self.weights = weights
+    def __init__(self, total_weights, positive_weights, negative_weights):
+        self.total_weights = total_weights
+        self.positive_weights = positive_weights
+        self.negative_weights = negative_weights
+
+    @property
+    def weights_n(self):
+        """Backward compatibility."""
+        return self.total_weights[1:]
+
+    @property
+    def weights(self):
+        """Backward compatibility."""
+        return np.concatenate(
+            [
+                self.positive_weights.toarray()[:, None, 1:],
+                self.negative_weights.toarray()[:, None, 1:]
+            ],
+            axis=1
+        )
+
 
     @classmethod
     def from_entity_statistics(cls, entity_stats):
@@ -112,7 +130,7 @@ class TokenStatistics:
         row = counts.col
         col = counts.data
         data = np.ones_like(col)
-        positive_count_weights = sparse.coo_matrix(
+        positive_weights = sparse.coo_matrix(
             (data, (row, col)),
             shape=(n_tokens, max_n_obs_count + 1)
         )
@@ -133,7 +151,7 @@ class TokenStatistics:
         col.append(entity_stats.n_observations[counts.row] - counts.data)
         data.append(np.ones_like(counts.row))
 
-        negative_count_weights = sparse.coo_matrix(
+        negative_weights = sparse.coo_matrix(
             (np.concatenate(data), (np.concatenate(row), np.concatenate(col))),
             shape=(n_tokens, max_n_obs_count + 1)
         )
@@ -141,41 +159,54 @@ class TokenStatistics:
         total_weights = np.zeros(n_obs_vals[-1] + 1, counts.dtype)
         total_weights[n_obs_vals] = n_obs_cnts
         # backward compatibility: convert to dense format
-        return cls(
-            total_weights[1:],
-            np.concatenate([positive_count_weights.toarray()[:, None, 1:], negative_count_weights.toarray()[:, None, 1:]], axis=1)
-        )
+        return cls(total_weights, positive_weights, negative_weights)
 
     @classmethod
     def from_observations(cls, observations):
         """Aggregate observations to token level."""
-        n_rows, n_cols = observations.shape
-        weights_n = np.array([n_rows], dtype=np.int32)
+        dtype = dict(dtype=np.int32)
+        n_rows, n_tokens = observations.shape
+        total_weights = np.array([0, n_rows], **dtype)
 
-        weights = np.zeros((n_cols, 2, 1), dtype=np.int32)
+
         counts = np.array(observations.sum(axis=0)).ravel()
-        weights[:, 0, 0] = counts
-        weights[:, 1, 0] = n_rows - counts
-        return cls(weights_n, weights)
+        positive_weights = sparse.coo_matrix(
+            (counts, (np.arange(n_tokens, **dtype), np.ones(n_tokens, **dtype))),
+            shape=(n_tokens, 2)
+        )
+        negative_weights = sparse.coo_matrix(
+            (n_rows - counts, (np.arange(n_tokens, **dtype), np.ones(n_tokens, **dtype))),
+            shape=(n_tokens, 2)
+        )
+
+        return cls(total_weights, positive_weights, negative_weights)
 
     def add(self, other):
         """Add token counts."""
+        dtype = dict(dtype=np.int32)
         if self.size != other.size:
             raise ValueError('Incompatible number of tokens: %d != %d' % (self.size, other.size))
         n_tokens = self.size
-        n_max = max(self.max_count, other.max_count)
-        weights_n = np.zeros(n_max, dtype=np.int32)
-        weights = np.zeros((n_tokens, 2, n_max))
+        n_max = 1 + max(self.max_count, other.max_count)
+        total_weights = np.zeros(n_max, **dtype)
+        positive_weights = sparse.coo_matrix((n_tokens, n_max), **dtype)
+        negative_weights = sparse.coo_matrix((n_tokens, n_max), **dtype)
         for obj in [self, other]:
-            weights_n[:obj.weights_n.size] += obj.weights_n
-            weights[:, :, :obj.weights.shape[-1]] += obj.weights
-        return self.__class__(weights_n, weights)
+            total_weights[:obj.total_weights.size] += obj.total_weights
+            padding = sparse.coo_matrix(
+                (n_tokens, n_max - obj.max_count - 1),
+                dtype=positive_weights.dtype
+            )
+            positive_weights += sparse.hstack([obj.positive_weights, padding])
+            negative_weights += sparse.hstack([obj.negative_weights, padding])
+        return self.__class__(total_weights, positive_weights, negative_weights)
 
     def copy(self):
         """Create new instance with copied data."""
         return self.__class__(
-            self.weights_n.copy(),
-            self.weights.copy()
+            self.total_weights.copy(),
+            self.positive_weights.copy(),
+            self.negative_weights.copy()
         )
 
     def __repr__(self):
@@ -184,9 +215,9 @@ class TokenStatistics:
     @property
     def size(self):
         """Get number of tokens."""
-        return self.weights.shape[0]
+        return self.positive_weights.shape[0]
 
     @property
     def max_count(self):
         """Get max number of entity observations."""
-        return self.weights_n.size
+        return self.total_weights.size - 1

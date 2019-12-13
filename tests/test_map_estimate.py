@@ -2,7 +2,8 @@
 import pytest
 
 import numpy as np
-from scipy.sparse import csr_matrix
+
+from scipy import sparse
 
 from ptfidf.inference import map_estimate, NormalDist
 from ptfidf import aggregation as agg
@@ -22,7 +23,7 @@ def test_map_estimate_easy():
     nobs = np.ones(counts.shape[0], dtype=np.int32)  # pylint: disable=unsubscriptable-object
 
     token_stats = agg.TokenStatistics.from_entity_statistics(
-        agg.EntityStatistics(csr_matrix(counts), nobs)
+        agg.EntityStatistics(sparse.csr_matrix(counts), nobs)
     )
 
     prior = NormalDist(-1., 1.)
@@ -49,7 +50,7 @@ def test_map_estimate_weight_deduplication():
     nobs = np.ones(counts.shape[0], dtype=np.int32)  # pylint: disable=unsubscriptable-object
 
     token_stats = agg.TokenStatistics.from_entity_statistics(
-        agg.EntityStatistics(csr_matrix(counts), nobs)
+        agg.EntityStatistics(sparse.csr_matrix(counts), nobs)
     )
 
     prior = NormalDist(-1., 1.)
@@ -82,11 +83,9 @@ def test_map_estimate_strength_trend(all_same, expect_less_than):
     actual = []
     for weight in range(1, 3):
         token_stats = agg.TokenStatistics(
-            np.array([100, weight]),
-            np.array([[
-                [10 + (1 - all_same) * weight, all_same * weight],
-                [90 + (1 - all_same) * weight, 0],
-            ]])
+            np.array([0, 100, weight]),
+            sparse.coo_matrix([[0, 10 + (1 - all_same) * weight, all_same * weight]], dtype=np.int32),
+            sparse.coo_matrix([[0, 90 + (1 - all_same) * weight, 0]], dtype=np.int32)
         )
         beta_dist = map_estimate(token_stats, prior)
         actual.append(np.log(beta_dist.strength[0]))
