@@ -208,6 +208,25 @@ class TokenStatistics:
             self.negative_weights.copy()
         )
 
+    def get_unique_weights(self):
+        """Return deduplicated weights.
+
+        Returns
+        -------
+        (positive_weights, negative_weights, index, inverse, counts) : tuple
+            positive_weights and negative_weights are deduplicated.
+            index, inverse, counts are defined like in numpy.unique
+        """
+        n = self.total_weights.size
+        # Need to find simultaneous unique rows of positive_weights and negative weights
+        projection = np.random.uniform(-1., 1., size=(n, min(n, 10)))
+        hashed = np.c_[self.positive_weights.dot(projection), self.negative_weights.dot(projection)]
+        _, index, inverse, counts = np.unique(
+            hashed, axis=0,
+            return_counts=True, return_index=True, return_inverse=True
+        )
+        return self.positive_weights[index], self.negative_weights[index], index, inverse, counts
+
     def __repr__(self):
         return 'TokenStatistics(%d tokens)' % self.size
 
