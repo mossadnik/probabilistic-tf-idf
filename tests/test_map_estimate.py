@@ -84,8 +84,8 @@ def test_map_estimate_strength_trend(all_same, expect_less_than):
     for weight in range(1, 3):
         token_stats = agg.TokenStatistics(
             np.array([0, 100, weight]),
-            sparse.coo_matrix([[0, 10 + (1 - all_same) * weight, all_same * weight]], dtype=np.int32),
-            sparse.coo_matrix([[0, 90 + (1 - all_same) * weight, 0]], dtype=np.int32)
+            sparse.coo_matrix([[0, 10 + (1 - all_same) * weight, all_same * weight]]),
+            sparse.coo_matrix([[0, 90 + (1 - all_same) * weight, 0]])
         )
         beta_dist = map_estimate(token_stats, prior)
         actual.append(np.log(beta_dist.strength[0]))
