@@ -100,20 +100,26 @@ def _unpack(x):
     return pi, s
 
 
-def _loss(x, weights, total_weights, prior: NormalDist):
+def _loss(x, positive_weights, negative_weights, total_weights, prior: NormalDist):
     pi, s = _unpack(x)
     alpha, beta = pi * s, (1 - pi) * s
-    res = -beta_binomial_log_likelihood(alpha, beta, weights, total_weights)
+    res = -beta_binomial_log_likelihood(
+        alpha, beta,
+        positive_weights, negative_weights, total_weights
+    )
     # prior
     res += .5 * (np.log(s) - prior.mean)**2 / prior.std**2
     return res.sum()
 
 
-def _loss_grad(x, weights, total_weights, prior: NormalDist):
+def _loss_grad(x, positive_weights, negative_weights, total_weights, prior: NormalDist):
     pi, s = _unpack(x)
     # gradient for alpha, beta
     alpha, beta = pi * s, (1 - pi) * s
-    grad_ab = -beta_binomial_log_likelihood_grad(alpha, beta, weights, total_weights)
+    grad_ab = -beta_binomial_log_likelihood_grad(
+        alpha, beta,
+        positive_weights, negative_weights, total_weights
+    )
     # transformations
     grad = np.empty_like(grad_ab)
     # pi / s
@@ -159,12 +165,6 @@ def map_estimate(token_stats, prior, strength_init=None, mean_init=None):
     total_weights = token_stats.total_weights
     positive_weights, negative_weights, index, inverse, _ = token_stats.get_unique_weights()
 
-    # convert deduplicated to dense array until likelihood refactoring
-    weights = np.concatenate([
-        positive_weights.toarray()[:, None, 1:],
-        negative_weights.toarray()[:, None, 1:]
-    ], axis=1)
-
     s = strength_init
     if s is None:
         s = np.exp(prior.mean) * np.ones(token_stats.size)
@@ -175,7 +175,7 @@ def map_estimate(token_stats, prior, strength_init=None, mean_init=None):
     res = minimize(
         _loss,
         _pack(pi[index], s[index]),
-        args=(weights, total_weights[1:], prior),
+        args=(positive_weights, negative_weights, total_weights, prior),
         jac=_loss_grad,
         method='L-BFGS-B')
 
