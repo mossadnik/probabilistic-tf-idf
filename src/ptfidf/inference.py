@@ -127,14 +127,15 @@ def _loss_grad(x, weights, total_weights, prior: NormalDist):
     return grad.ravel()
 
 
-def init_beta_binomial_proba(weights, a0=0., b0=0.):
+def init_beta_binomial_proba(positive_weights, negative_weights, a0=0., b0=0.):
     """Initialize frequencies with smoothed empirical means."""
-    n_max = weights.shape[-1]
-    counts = np.sum(weights * np.arange(1, n_max + 1)[None, None, :], axis=-1)
-    return (a0 + counts[:, 0]) / (a0 + b0 + counts.sum(axis=1))
+    counts = np.arange(positive_weights.shape[1])
+    positive_counts = positive_weights.dot(counts)
+    negative_counts = negative_weights.dot(counts)
+    return (a0 + positive_counts) / (a0 + b0 + positive_counts + negative_counts)
 
 
-def map_estimate(token_stats, prior, s_init=None, pi_init=None):
+def map_estimate(token_stats, prior, strength_init=None, mean_init=None):
     """Compute MAP estimate of token-level prior parameters.
 
     Parameters
@@ -143,9 +144,9 @@ def map_estimate(token_stats, prior, s_init=None, pi_init=None):
         Token-level statistics.
     prior : ptfidf.inference.NormalDist
         Prior distribution of log strength parameter.
-    s_init : numpy.ndarray, optional
+    strength_init : numpy.ndarray, optional
         Initial value for strength parameter. Defaults to prior mean.
-    pi_init : numpy.ndarray, optional
+    mean_init : numpy.ndarray, optional
         Initial value for mean parameter. Defaults to a heuristic based
         on the strength parameter and token_stats.
 
@@ -158,14 +159,18 @@ def map_estimate(token_stats, prior, s_init=None, pi_init=None):
     total_weights = token_stats.total_weights
     positive_weights, negative_weights, index, inverse, _ = token_stats.get_unique_weights()
 
-    # convert deduplicated to dense array
+    # convert deduplicated to dense array until likelihood refactoring
     weights = np.concatenate([
         positive_weights.toarray()[:, None, 1:],
         negative_weights.toarray()[:, None, 1:]
     ], axis=1)
 
-    s = np.exp(prior.mean) * np.ones(token_stats.size) if s_init is None else s_init
-    pi = init_beta_binomial_proba(weights) if pi_init is None else pi_init
+    s = strength_init
+    if s is None:
+        s = np.exp(prior.mean) * np.ones(token_stats.size)
+    pi = mean_init
+    if pi is None:
+        pi = init_beta_binomial_proba(positive_weights, negative_weights)
 
     res = minimize(
         _loss,
