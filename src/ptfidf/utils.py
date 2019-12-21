@@ -80,3 +80,13 @@ def sample_assignments(proba):
         if choice < slc.stop - slc.start:
             assignments[row] = proba.indices[slc][choice]
     return assignments
+
+
+def repr_maybe_array(value):
+    """Shorter array representation than numpy default.
+
+    Also works on scalars.
+    """
+    if np.isscalar(value):
+        return repr(value)
+    return np.array2string(value, threshold=7)

@@ -1,8 +1,11 @@
 -e .
-# for running examples
+# dev
+pylint
+pytest
+bump2version
+# examples
 jupyter
 pandas
 matplotlib
 scikit-learn
 requests
-pylint
