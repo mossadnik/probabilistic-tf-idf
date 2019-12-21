@@ -1,38 +1,54 @@
 """Beta-Binomial likelihood and gradient."""
 
 import numpy as np
+from scipy.special import gammaln, digamma
 
 
-def cum_log_gamma_ratio(x, n, deriv=0):
-    """Evaluate a_i = sum_{j=0}^{i} log(x + j)} for i in [0, n - 1]."""
-    arg = x[:, None] + np.arange(n)[None, :]
+def sparse_gammaln_ratio(x, weights, deriv=0):
+    """Compute gammaln(x + n) - gammaln(x) parametrized with sparse weights."""
     if deriv == 0:
-        res = np.log(arg)
+        func = gammaln
     elif deriv == 1:
-        res = 1. / arg
-    elif deriv == 2:
-        res = -arg**(-2.)
+        func = digamma
     else:
-        raise NotImplementedError('Only derivatives up to second order implemented.')
-    return np.cumsum(res, axis=-1)
+        raise NotImplementedError('Only derivatives up to first order supported')
+    res = weights.tocoo(copy=True)
+    x_row = x[res.row]
+    res.data = func(x_row + res.col) - func(x_row)
+    return res.multiply(weights).sum(axis=1).A.ravel()
 
 
-def beta_binomial_log_likelihood(alpha, beta, weights, weights_n):
-    """Compute log-likelihood for Beta-Binomial parameters."""
-    n_max = weights_n.size
+def dense_gammaln_ratio(x, weights, deriv=0):
+    """Compute gammaln(x + n) - gammaln(x) parametrized with dense weights."""
+    if deriv == 0:
+        func = gammaln
+    elif deriv == 1:
+        func = digamma
+    else:
+        raise NotImplementedError('Only derivatives up to first order supported')
+    counts = np.where(weights)[0]
+    weights = weights[counts]
+    return func(x[:, None] + counts[None, :]).dot(weights) - func(x) * weights.sum()
 
-    res = np.sum(weights[:, 0] * cum_log_gamma_ratio(alpha, n_max), axis=-1)
-    res += np.sum(weights[:, 1] * cum_log_gamma_ratio(beta, n_max), axis=-1)
-    res -= cum_log_gamma_ratio(alpha + beta, n_max).dot(weights_n)
+
+def beta_binomial_log_likelihood(
+        alpha, beta,
+        positive_weights, negative_weights, total_weights
+):
+    """Beta-binomial likelihood"""
+    res = sparse_gammaln_ratio(alpha, positive_weights)
+    res += sparse_gammaln_ratio(beta, negative_weights)
+    res -= dense_gammaln_ratio(alpha + beta, total_weights)
     return res
 
 
-def beta_binomial_log_likelihood_grad(alpha, beta, weights, weights_n):
-    """Compute gradient of log-likelihood for Beta-Binomial parameters."""
-    kw = dict(deriv=1, n=weights_n.size)
-
+def beta_binomial_log_likelihood_grad(
+        alpha, beta,
+        positive_weights, negative_weights, total_weights
+):
+    """Gradient of Beta-Binomial likelihood"""
     res = np.empty((2, alpha.size))
-    res[0] = np.sum(weights[:, 0] * cum_log_gamma_ratio(alpha, **kw), axis=-1)
-    res[1] = np.sum(weights[:, 1] * cum_log_gamma_ratio(beta, **kw), axis=-1)
-    res -= cum_log_gamma_ratio(alpha + beta, **kw).dot(weights_n)[None, :]
+    res[0] = sparse_gammaln_ratio(alpha, positive_weights, deriv=1)
+    res[1] = sparse_gammaln_ratio(beta, negative_weights, deriv=1)
+    res -= dense_gammaln_ratio(alpha + beta, total_weights, deriv=1)
     return res

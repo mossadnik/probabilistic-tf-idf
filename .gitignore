@@ -14,7 +14,7 @@ __pycache__/
 /.eggs/
 *.egg-info/
 
-/data/
-
-notebooks/_*.ipynb
+# notebooks
+Untitled*.ipynb
+_*.ipynb
 .ipynb_checkpoints/
