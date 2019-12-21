@@ -14,8 +14,6 @@ __pycache__/
 /.eggs/
 *.egg-info/
 
-/data/
-
 # notebooks
 Untitled*.ipynb
 _*.ipynb
