@@ -2,7 +2,8 @@
 import pytest
 
 import numpy as np
-from scipy.sparse import csr_matrix
+
+from scipy import sparse
 
 from ptfidf.inference import map_estimate, NormalDist
 from ptfidf import aggregation as agg
@@ -22,7 +23,7 @@ def test_map_estimate_easy():
     nobs = np.ones(counts.shape[0], dtype=np.int32)  # pylint: disable=unsubscriptable-object
 
     token_stats = agg.TokenStatistics.from_entity_statistics(
-        agg.EntityStatistics(csr_matrix(counts), nobs)
+        agg.EntityStatistics(sparse.csr_matrix(counts), nobs)
     )
 
     prior = NormalDist(-1., 1.)
@@ -36,8 +37,17 @@ def test_map_estimate_easy():
     assert np.allclose(beta_dist.strength, expected_s)
 
 
-def test_map_estimate_weight_deduplication():
+@pytest.mark.parametrize('strength_init,mean_init', [
+    (None, None),  # no init
+    (np.array([1., 1., 1.]), None),  # init strength only
+    (None, np.array([.1, .2, .3])),  # init mean only
+    (np.array([.1, 1., 10.]), np.array([.02, .01, .99])),  # both
+])
+def test_map_estimate_weight_deduplication(strength_init, mean_init):
     """Same as easy, but with duplicate weights to test deduplication.
+
+    Test different combinations of init parameters, all of which converge
+    to the same result.
 
     pi is population average,
     s stays at prior mean.
@@ -49,15 +59,18 @@ def test_map_estimate_weight_deduplication():
     nobs = np.ones(counts.shape[0], dtype=np.int32)  # pylint: disable=unsubscriptable-object
 
     token_stats = agg.TokenStatistics.from_entity_statistics(
-        agg.EntityStatistics(csr_matrix(counts), nobs)
+        agg.EntityStatistics(sparse.csr_matrix(counts), nobs)
     )
 
     prior = NormalDist(-1., 1.)
 
     expected_pi = np.array([.7, .3, .7])
-    expected_s = np.exp(prior.mean) * np.ones_like(expected_pi)
+    expected_s = np.full_like(expected_pi, np.exp(prior.mean))
 
-    beta_dist = map_estimate(token_stats, prior)
+    beta_dist = map_estimate(
+        token_stats, prior,
+        strength_init=strength_init, mean_init=mean_init
+    )
 
     assert np.allclose(beta_dist.mean, expected_pi)
     assert np.allclose(beta_dist.strength, expected_s)
@@ -82,11 +95,9 @@ def test_map_estimate_strength_trend(all_same, expect_less_than):
     actual = []
     for weight in range(1, 3):
         token_stats = agg.TokenStatistics(
-            np.array([100, weight]),
-            np.array([[
-                [10 + (1 - all_same) * weight, all_same * weight],
-                [90 + (1 - all_same) * weight, 0],
-            ]])
+            np.array([0, 100, weight]),
+            sparse.coo_matrix([[0, 10 + (1 - all_same) * weight, all_same * weight]]),
+            sparse.coo_matrix([[0, 90 + (1 - all_same) * weight, 0]])
         )
         beta_dist = map_estimate(token_stats, prior)
         actual.append(np.log(beta_dist.strength[0]))
