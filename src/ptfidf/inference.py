@@ -5,6 +5,7 @@ MAP estimation
 import numpy as np
 from scipy.optimize import minimize
 from scipy.special import expit, logit
+from scipy import stats
 
 from .likelihood import beta_binomial_log_likelihood, beta_binomial_log_likelihood_grad
 from . import utils as ut
@@ -24,6 +25,10 @@ class NormalDist:
     def __init__(self, mean=0., std=1.):
         self.mean = mean
         self.std = std
+
+    def lpdf(self, x):
+        """Return log-pdf."""
+        return stats.norm.logpdf(x, self.mean, self.std)
 
     def __repr__(self):
         return 'NormalDist(mean={}, std={})'.format(
@@ -64,6 +69,10 @@ class BetaDist:
         strength : float or numpy.ndarray
         """
         return cls(mean * strength, (1. - mean) * strength)
+
+    def lpdf(self, x):
+        """Return log-pdf."""
+        return stats.beta(x, self.alpha, self.beta)
 
     def update(self, other, fraction=1.):
         """Update parameters."""
