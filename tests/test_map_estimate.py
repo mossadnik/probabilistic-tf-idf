@@ -5,7 +5,7 @@ import numpy as np
 
 from scipy import sparse
 
-from ptfidf.inference import map_estimate, NormalDist
+from ptfidf.inference import map_estimate, NormalDist, BetaDist
 from ptfidf import aggregation as agg
 
 
@@ -106,3 +106,26 @@ def test_map_estimate_strength_trend(all_same, expect_less_than):
     assert (actual[0] < prior.mean) == expect_less_than
     # move further as evidence added
     assert (actual[1] < actual[0]) == expect_less_than
+
+
+def test_mean_prior_avoids_boundary():
+    """
+    The main point of mean prior is to prevent problems when unregularized
+    estimate is at domain boundary. Check that adding the prior fixes this.
+    """
+
+    token_stats = agg.TokenStatistics.from_observations(
+        sparse.csr_matrix(np.array([
+            [1, 0],
+            [1, 0],
+        ]))
+    )
+
+    with pytest.warns(None) as record:
+        map_estimate(token_stats, NormalDist(0., 1.), BetaDist(1.1, 1.1))
+
+    # filter deprecation warning from numpy/scipy
+    assert not [r for r in record if not r.category in [PendingDeprecationWarning]]
+
+    with pytest.warns(RuntimeWarning):
+        map_estimate(token_stats, NormalDist(0., 1.))

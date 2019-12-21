@@ -117,7 +117,11 @@ def _unpack(x):
     return pi, s
 
 
-def _loss(x, positive_weights, negative_weights, total_weights, prior: NormalDist):
+def _loss(
+        x,
+        positive_weights, negative_weights, total_weights,
+        mean_prior: BetaDist, strength_prior: NormalDist
+):
     pi, s = _unpack(x)
     alpha, beta = pi * s, (1 - pi) * s
     res = -beta_binomial_log_likelihood(
@@ -125,11 +129,16 @@ def _loss(x, positive_weights, negative_weights, total_weights, prior: NormalDis
         positive_weights, negative_weights, total_weights
     )
     # prior
-    res -= prior.lpdf(np.log(s))
+    res -= strength_prior.lpdf(np.log(s))
+    res -= mean_prior.lpdf(pi)
     return res.sum()
 
 
-def _loss_grad(x, positive_weights, negative_weights, total_weights, prior: NormalDist):
+def _loss_grad(
+        x,
+        positive_weights, negative_weights, total_weights,
+        mean_prior: BetaDist, strength_prior: NormalDist
+):
     pi, s = _unpack(x)
     # gradient for alpha, beta
     alpha, beta = pi * s, (1 - pi) * s
@@ -142,11 +151,13 @@ def _loss_grad(x, positive_weights, negative_weights, total_weights, prior: Norm
     # pi / s
     grad[0] = s * (grad_ab[0] - grad_ab[1])
     grad[1] = pi * grad_ab[0] + (1 - pi) * grad_ab[1]
+    # mean prior here because it is in pi-domain
+    grad[0] -= mean_prior.lpdf_grad(pi)
     # link functions
     grad[0] *= pi * (1 - pi)
     grad[1] *= s
     # prior
-    grad[1] -= prior.lpdf_grad(np.log(s))
+    grad[1] -= strength_prior.lpdf_grad(np.log(s))
     return grad.ravel()
 
 
@@ -158,15 +169,22 @@ def init_beta_binomial_proba(positive_weights, negative_weights, a0=0., b0=0.):
     return (a0 + positive_counts) / (a0 + b0 + positive_counts + negative_counts)
 
 
-def map_estimate(token_stats, prior, strength_init=None, mean_init=None):
+def map_estimate(
+        token_stats,
+        strength_prior: NormalDist,
+        mean_prior: BetaDist = None,
+        strength_init=None, mean_init=None):
     """Compute MAP estimate of token-level prior parameters.
 
     Parameters
     ----------
     token_stats : ptfidf.aggregation.TokenStatistics
         Token-level statistics.
-    prior : ptfidf.inference.NormalDist
+    strength_prior : ptfidf.inference.NormalDist
         Prior distribution of log strength parameter.
+    mean_prior: ptfidf.inference.BetaDist, optional
+        Prior distribution of mean parameter, optional.
+        Flat prior if omitted.
     strength_init : numpy.ndarray, optional
         Initial value for strength parameter. Defaults to prior mean.
     mean_init : numpy.ndarray, optional
@@ -183,19 +201,27 @@ def map_estimate(token_stats, prior, strength_init=None, mean_init=None):
     positive_weights, negative_weights, index, inverse, _ = token_stats.get_unique_weights()
     n_unique_tokens = positive_weights.shape[0]
 
+    if mean_prior is None:
+        mean_prior = BetaDist(1., 1.)  # use flat prior if not specified
+
     if strength_init is not None:
         s = strength_init[index]
     else:
-        s = np.full(n_unique_tokens, np.exp(prior.mean))
+        s = np.full(n_unique_tokens, np.exp(strength_prior.mean))
     if mean_init is not None:
         pi = mean_init[index]
     else:
-        pi = init_beta_binomial_proba(positive_weights, negative_weights)
+        pi = init_beta_binomial_proba(
+            positive_weights, negative_weights,
+            mean_prior.alpha - 1., mean_prior.beta - 1.,
+        )
 
     res = minimize(
         _loss,
         _pack(pi, s),
-        args=(positive_weights, negative_weights, total_weights, prior),
+        args=(
+            positive_weights, negative_weights, total_weights,
+            mean_prior, strength_prior),
         jac=_loss_grad,
         method='L-BFGS-B')
 
