@@ -112,6 +112,8 @@ def test_mean_prior_avoids_boundary():
     """
     The main point of mean prior is to prevent problems when unregularized
     estimate is at domain boundary. Check that adding the prior fixes this.
+
+    Before, could have either RuntimeError or RuntimeWarning.
     """
 
     token_stats = agg.TokenStatistics.from_observations(
@@ -126,6 +128,3 @@ def test_mean_prior_avoids_boundary():
 
     # filter deprecation warning from numpy/scipy
     assert not [r for r in record if not r.category in [PendingDeprecationWarning]]
-
-    with pytest.warns(RuntimeWarning):
-        map_estimate(token_stats, NormalDist(0., 1.))
