@@ -30,6 +30,10 @@ class NormalDist:
         """Return log-pdf."""
         return stats.norm.logpdf(x, self.mean, self.std)
 
+    def lpdf_grad(self, x):
+        """Return grad of log-pdf with respect to x."""
+        return -(x - self.mean) / self.std**2
+
     def __repr__(self):
         return 'NormalDist(mean={}, std={})'.format(
             ut.repr_maybe_array(self.mean),
@@ -72,7 +76,11 @@ class BetaDist:
 
     def lpdf(self, x):
         """Return log-pdf."""
-        return stats.beta(x, self.alpha, self.beta)
+        return stats.beta.logpdf(x, self.alpha, self.beta)
+
+    def lpdf_grad(self, x):
+        """Return grad of log-pdf with respect to x."""
+        return (self.alpha - 1) / x + (self.beta - 1) / (x - 1)
 
     def update(self, other, fraction=1.):
         """Update parameters."""
