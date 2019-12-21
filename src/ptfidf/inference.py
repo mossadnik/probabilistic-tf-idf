@@ -5,6 +5,7 @@ MAP estimation
 import numpy as np
 from scipy.optimize import minimize
 from scipy.special import expit, logit
+from scipy import stats
 
 from .likelihood import beta_binomial_log_likelihood, beta_binomial_log_likelihood_grad
 from . import utils as ut
@@ -24,6 +25,14 @@ class NormalDist:
     def __init__(self, mean=0., std=1.):
         self.mean = mean
         self.std = std
+
+    def lpdf(self, x):
+        """Return log-pdf."""
+        return stats.norm.logpdf(x, self.mean, self.std)
+
+    def lpdf_grad(self, x):
+        """Return grad of log-pdf with respect to x."""
+        return -(x - self.mean) / self.std**2
 
     def __repr__(self):
         return 'NormalDist(mean={}, std={})'.format(
@@ -65,6 +74,14 @@ class BetaDist:
         """
         return cls(mean * strength, (1. - mean) * strength)
 
+    def lpdf(self, x):
+        """Return log-pdf."""
+        return stats.beta.logpdf(x, self.alpha, self.beta)
+
+    def lpdf_grad(self, x):
+        """Return grad of log-pdf with respect to x."""
+        return (self.alpha - 1) / x + (self.beta - 1) / (x - 1)
+
     def update(self, other, fraction=1.):
         """Update parameters."""
         for variable in ['alpha', 'beta']:
@@ -100,7 +117,11 @@ def _unpack(x):
     return pi, s
 
 
-def _loss(x, positive_weights, negative_weights, total_weights, prior: NormalDist):
+def _loss(
+        x,
+        positive_weights, negative_weights, total_weights,
+        mean_prior: BetaDist, strength_prior: NormalDist
+):
     pi, s = _unpack(x)
     alpha, beta = pi * s, (1 - pi) * s
     res = -beta_binomial_log_likelihood(
@@ -108,11 +129,16 @@ def _loss(x, positive_weights, negative_weights, total_weights, prior: NormalDis
         positive_weights, negative_weights, total_weights
     )
     # prior
-    res += .5 * (np.log(s) - prior.mean)**2 / prior.std**2
+    res -= strength_prior.lpdf(np.log(s))
+    res -= mean_prior.lpdf(pi)
     return res.sum()
 
 
-def _loss_grad(x, positive_weights, negative_weights, total_weights, prior: NormalDist):
+def _loss_grad(
+        x,
+        positive_weights, negative_weights, total_weights,
+        mean_prior: BetaDist, strength_prior: NormalDist
+):
     pi, s = _unpack(x)
     # gradient for alpha, beta
     alpha, beta = pi * s, (1 - pi) * s
@@ -125,11 +151,13 @@ def _loss_grad(x, positive_weights, negative_weights, total_weights, prior: Norm
     # pi / s
     grad[0] = s * (grad_ab[0] - grad_ab[1])
     grad[1] = pi * grad_ab[0] + (1 - pi) * grad_ab[1]
+    # mean prior here because it is in pi-domain
+    grad[0] -= mean_prior.lpdf_grad(pi)
     # link functions
     grad[0] *= pi * (1 - pi)
     grad[1] *= s
     # prior
-    grad[1] += (np.log(s) - prior.mean) / prior.std**2
+    grad[1] -= strength_prior.lpdf_grad(np.log(s))
     return grad.ravel()
 
 
@@ -141,15 +169,22 @@ def init_beta_binomial_proba(positive_weights, negative_weights, a0=0., b0=0.):
     return (a0 + positive_counts) / (a0 + b0 + positive_counts + negative_counts)
 
 
-def map_estimate(token_stats, prior, strength_init=None, mean_init=None):
+def map_estimate(
+        token_stats,
+        strength_prior: NormalDist,
+        mean_prior: BetaDist = None,
+        strength_init=None, mean_init=None):
     """Compute MAP estimate of token-level prior parameters.
 
     Parameters
     ----------
     token_stats : ptfidf.aggregation.TokenStatistics
         Token-level statistics.
-    prior : ptfidf.inference.NormalDist
+    strength_prior : ptfidf.inference.NormalDist
         Prior distribution of log strength parameter.
+    mean_prior: ptfidf.inference.BetaDist, optional
+        Prior distribution of mean parameter, optional.
+        Flat prior if omitted.
     strength_init : numpy.ndarray, optional
         Initial value for strength parameter. Defaults to prior mean.
     mean_init : numpy.ndarray, optional
@@ -166,19 +201,27 @@ def map_estimate(token_stats, prior, strength_init=None, mean_init=None):
     positive_weights, negative_weights, index, inverse, _ = token_stats.get_unique_weights()
     n_unique_tokens = positive_weights.shape[0]
 
+    if mean_prior is None:
+        mean_prior = BetaDist(1., 1.)  # use flat prior if not specified
+
     if strength_init is not None:
         s = strength_init[index]
     else:
-        s = np.full(n_unique_tokens, np.exp(prior.mean))
+        s = np.full(n_unique_tokens, np.exp(strength_prior.mean))
     if mean_init is not None:
         pi = mean_init[index]
     else:
-        pi = init_beta_binomial_proba(positive_weights, negative_weights)
+        pi = init_beta_binomial_proba(
+            positive_weights, negative_weights,
+            mean_prior.alpha - 1., mean_prior.beta - 1.,
+        )
 
     res = minimize(
         _loss,
         _pack(pi, s),
-        args=(positive_weights, negative_weights, total_weights, prior),
+        args=(
+            positive_weights, negative_weights, total_weights,
+            mean_prior, strength_prior),
         jac=_loss_grad,
         method='L-BFGS-B')
 
