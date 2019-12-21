@@ -164,17 +164,20 @@ def map_estimate(token_stats, prior, strength_init=None, mean_init=None):
     # unique weights for saving multiple computation
     total_weights = token_stats.total_weights
     positive_weights, negative_weights, index, inverse, _ = token_stats.get_unique_weights()
+    n_unique_tokens = positive_weights.shape[0]
 
-    s = strength_init
-    if s is None:
-        s = np.exp(prior.mean) * np.ones(token_stats.size)
-    pi = mean_init
-    if pi is None:
+    if strength_init is not None:
+        s = strength_init[index]
+    else:
+        s = np.full(n_unique_tokens, np.exp(prior.mean))
+    if mean_init is not None:
+        pi = mean_init[index]
+    else:
         pi = init_beta_binomial_proba(positive_weights, negative_weights)
 
     res = minimize(
         _loss,
-        _pack(pi[index], s[index]),
+        _pack(pi, s),
         args=(positive_weights, negative_weights, total_weights, prior),
         jac=_loss_grad,
         method='L-BFGS-B')

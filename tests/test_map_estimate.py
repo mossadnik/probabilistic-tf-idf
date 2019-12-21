@@ -37,8 +37,17 @@ def test_map_estimate_easy():
     assert np.allclose(beta_dist.strength, expected_s)
 
 
-def test_map_estimate_weight_deduplication():
+@pytest.mark.parametrize('strength_init,mean_init', [
+    (None, None),  # no init
+    (np.array([1., 1., 1.]), None),  # init strength only
+    (None, np.array([.1, .2, .3])),  # init mean only
+    (np.array([.1, 1., 10.]), np.array([.02, .01, .99])),  # both
+])
+def test_map_estimate_weight_deduplication(strength_init, mean_init):
     """Same as easy, but with duplicate weights to test deduplication.
+
+    Test different combinations of init parameters, all of which converge
+    to the same result.
 
     pi is population average,
     s stays at prior mean.
@@ -56,9 +65,12 @@ def test_map_estimate_weight_deduplication():
     prior = NormalDist(-1., 1.)
 
     expected_pi = np.array([.7, .3, .7])
-    expected_s = np.exp(prior.mean) * np.ones_like(expected_pi)
+    expected_s = np.full_like(expected_pi, np.exp(prior.mean))
 
-    beta_dist = map_estimate(token_stats, prior)
+    beta_dist = map_estimate(
+        token_stats, prior,
+        strength_init=strength_init, mean_init=mean_init
+    )
 
     assert np.allclose(beta_dist.mean, expected_pi)
     assert np.allclose(beta_dist.strength, expected_s)
