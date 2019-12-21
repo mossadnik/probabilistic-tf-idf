@@ -1,6 +1,5 @@
 """Beta-Binomial likelihood and gradient."""
 
-
 import numpy as np
 from scipy.special import gammaln, digamma
 
@@ -29,7 +28,6 @@ def dense_gammaln_ratio(x, weights, deriv=0):
         raise NotImplementedError('Only derivatives up to first order supported')
     counts = np.where(weights)[0]
     weights = weights[counts]
-    print(counts, weights, x, func(x[:, None] + counts[None, :]), func(x))
     return func(x[:, None] + counts[None, :]).dot(weights) - func(x) * weights.sum()
 
 
