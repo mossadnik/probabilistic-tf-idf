@@ -125,7 +125,7 @@ def _loss(x, positive_weights, negative_weights, total_weights, prior: NormalDis
         positive_weights, negative_weights, total_weights
     )
     # prior
-    res += .5 * (np.log(s) - prior.mean)**2 / prior.std**2
+    res -= prior.lpdf(np.log(s))
     return res.sum()
 
 
@@ -146,7 +146,7 @@ def _loss_grad(x, positive_weights, negative_weights, total_weights, prior: Norm
     grad[0] *= pi * (1 - pi)
     grad[1] *= s
     # prior
-    grad[1] += (np.log(s) - prior.mean) / prior.std**2
+    grad[1] -= prior.lpdf_grad(np.log(s))
     return grad.ravel()
 
 
