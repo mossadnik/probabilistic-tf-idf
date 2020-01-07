@@ -150,6 +150,8 @@ class TokenStatistics:
 
         Parameters
         ----------
+        observations: scipy.sparse.csr_matrix
+            Binary matrix with token counts per observation.
         """
         dtype = dict(dtype=np.int32)
         n_rows, n_tokens = observations.shape
@@ -169,7 +171,18 @@ class TokenStatistics:
         return cls(total_weights, positive_weights, negative_weights)
 
     def add(self, other):
-        """Add token counts."""
+        """Add token counts.
+
+        Parameters
+        ----------
+        other: ptfidf.aggregation.TokenStatistics
+            Statistics to add.
+
+        Returns
+        -------
+        ptfidf.aggregation.TokenStatistics
+            New object with added statistics.
+        """
         dtype = dict(dtype=np.int32)
         if self.size != other.size:
             raise ValueError('Incompatible number of tokens: %d != %d' % (self.size, other.size))
@@ -198,8 +211,27 @@ class TokenStatistics:
         ----------
         n_tokens : int >= 0
             Number of tokens to add.
-        """
 
+        Returns
+        -------
+        ptfidf.aggregation.TokenStatistics
+            New instance with extended token number. All weight
+            arrays are padded with zeros to the right.
+        """
+        if n_tokens == 0:
+            return self.copy()
+        positive_padding = sparse.coo_matrix(
+            (n_tokens, self.positive_weights.shape[1]),
+            dtype=self.positive_weights.dtype
+        )
+        negative_padding = sparse.coo_matrix(
+            np.repeat(self.total_weights[None, :], n_tokens, axis=0)
+        )
+        return self.__class__(
+            self.total_weights.copy(),
+            sparse.vstack([self.positive_weights, positive_padding]),
+            sparse.vstack([self.negative_weights, negative_padding])
+        )
 
     def copy(self):
         """Create new instance with copied data."""

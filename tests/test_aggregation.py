@@ -136,5 +136,38 @@ def test_add_token_statistics():
     right_token_stats = agg.TokenStatistics.from_entity_statistics(right_entity_stats)
     actual_token_stats = left_token_stats.add(right_token_stats)
 
-    assert np.all(expected_token_stats.positive_weights.toarray() == actual_token_stats.positive_weights.toarray())
-    assert np.all(expected_token_stats.negative_weights.toarray() == actual_token_stats.negative_weights.toarray())
+    assert np.all(
+        expected_token_stats.positive_weights.toarray()
+        == actual_token_stats.positive_weights.toarray()
+    )
+    assert np.all(
+        expected_token_stats.negative_weights.toarray()
+        == actual_token_stats.negative_weights.toarray()
+    )
+
+
+def test_token_statistics_extend_tokens():
+    counts = np.array([
+        [1, 1, 0],
+        [1, 2, 0],
+        [1, 0, 0]])
+    nobs = np.array([1, 3, 1])
+    entity_stats = agg.EntityStatistics(csr_matrix(counts), nobs)
+    token_stats = (
+        agg.TokenStatistics
+        .from_entity_statistics(entity_stats)
+    )
+    n_tokens = 2
+    res = token_stats.extend_tokens(n_tokens)
+    positive_weights = res.positive_weights.toarray()
+    negative_weights = res.negative_weights.toarray()
+
+    # weights for old tokens unchanged
+    assert np.all(positive_weights[:-n_tokens] == token_stats.positive_weights.toarray())
+    assert np.all(negative_weights[:-n_tokens] == token_stats.negative_weights.toarray())
+
+    # positive weights for new tokens all zero
+    assert np.all(positive_weights[-n_tokens:] == 0)
+
+    # negative weights equal total weights
+    assert np.all(negative_weights[-n_tokens:] == token_stats.total_weights[None, :])
