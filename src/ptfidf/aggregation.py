@@ -99,22 +99,6 @@ class TokenStatistics:
         self.positive_weights = sparse.csr_matrix(positive_weights)
         self.negative_weights = sparse.csr_matrix(negative_weights)
 
-    @property
-    def weights_n(self):
-        """Backward compatibility."""
-        return self.total_weights[1:]
-
-    @property
-    def weights(self):
-        """Backward compatibility."""
-        return np.concatenate(
-            [
-                self.positive_weights.toarray()[:, None, 1:],
-                self.negative_weights.toarray()[:, None, 1:]
-            ],
-            axis=1
-        )
-
     @classmethod
     def from_entity_statistics(cls, entity_stats):
         """Aggregate EntityStatistics to token level."""
@@ -162,7 +146,13 @@ class TokenStatistics:
 
     @classmethod
     def from_observations(cls, observations):
-        """Aggregate observations to token level."""
+        """Aggregate observations to token level.
+
+        Parameters
+        ----------
+        observations: scipy.sparse.csr_matrix
+            Binary matrix with token counts per observation.
+        """
         dtype = dict(dtype=np.int32)
         n_rows, n_tokens = observations.shape
         total_weights = np.array([0, n_rows], **dtype)
@@ -181,7 +171,18 @@ class TokenStatistics:
         return cls(total_weights, positive_weights, negative_weights)
 
     def add(self, other):
-        """Add token counts."""
+        """Add token counts.
+
+        Parameters
+        ----------
+        other: ptfidf.aggregation.TokenStatistics
+            Statistics to add.
+
+        Returns
+        -------
+        ptfidf.aggregation.TokenStatistics
+            New object with added statistics.
+        """
         dtype = dict(dtype=np.int32)
         if self.size != other.size:
             raise ValueError('Incompatible number of tokens: %d != %d' % (self.size, other.size))
@@ -199,6 +200,38 @@ class TokenStatistics:
             positive_weights += sparse.hstack([obj.positive_weights, padding])
             negative_weights += sparse.hstack([obj.negative_weights, padding])
         return self.__class__(total_weights, positive_weights, negative_weights)
+
+    def extend_tokens(self, n_tokens: int) -> None:
+        """Increase the number of tokens.
+
+        New tokens are appended at the end with all counts
+        set to zero.
+
+        Parameters
+        ----------
+        n_tokens : int >= 0
+            Number of tokens to add.
+
+        Returns
+        -------
+        ptfidf.aggregation.TokenStatistics
+            New instance with extended token number. All weight
+            arrays are padded with zeros to the right.
+        """
+        if n_tokens == 0:
+            return self.copy()
+        positive_padding = sparse.coo_matrix(
+            (n_tokens, self.positive_weights.shape[1]),
+            dtype=self.positive_weights.dtype
+        )
+        negative_padding = sparse.coo_matrix(
+            np.repeat(self.total_weights[None, :], n_tokens, axis=0)
+        )
+        return self.__class__(
+            self.total_weights.copy(),
+            sparse.vstack([self.positive_weights, positive_padding]),
+            sparse.vstack([self.negative_weights, negative_padding])
+        )
 
     def copy(self):
         """Create new instance with copied data."""
@@ -231,11 +264,11 @@ class TokenStatistics:
         return 'TokenStatistics(%d tokens)' % self.size
 
     @property
-    def size(self):
+    def size(self) -> int:
         """Get number of tokens."""
         return self.positive_weights.shape[0]
 
     @property
-    def max_count(self):
+    def max_count(self) -> int:
         """Get max number of entity observations."""
         return self.total_weights.size - 1
